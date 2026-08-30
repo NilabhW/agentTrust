@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<title>Agent Trust Gateway — Audit Log</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 2rem; background: #f7f7f8; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; }
+  section { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; }
+  #mandate-cards { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .mandate-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem 1rem; min-width: 220px; }
+  .mandate-card.status-active { border-left: 4px solid #2e7d32; }
+  .mandate-card.status-expired { border-left: 4px solid #999; }
+  .mandate-card.status-revoked { border-left: 4px solid #999; opacity: 0.6; }
+  .bar { background: #eee; border-radius: 4px; height: 8px; margin: 0.4rem 0; overflow: hidden; }
+  .bar-fill { background: #2e7d32; height: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; }
+  tr.decision-ok { background: #eaf6ea; }
+  tr.decision-bad { background: #fbeaea; }
+  tr.decision-warn { background: #fdf6e3; }
+</style>
+</head>
+<body>
+  <h1>Agent Trust Gateway</h1>
+
+  <section id="mandate-overview">
+    <h2>Mandate Overview</h2>
+    <div id="mandate-cards"></div>
+  </section>
+
+  <!-- Pending-approvals panel: deferred until Program 2 (Verification Gateway) exists -->
+
+  <section id="audit-log">
+    <h2>Audit Log</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th><th>Mandate</th><th>Agent</th><th>Category</th>
+          <th>Amount</th><th>Decision</th><th>Reason</th><th>Order</th><th>Payment</th>
+        </tr>
+      </thead>
+      <tbody id="audit-rows"></tbody>
+    </table>
+  </section>
+
+  <script>
+    const DECISION_CLASS = {
+      pass: "ok", order_created: "ok",
+      hard_fail: "bad", step_up_denied: "bad", payment_failed: "bad",
+      step_up_requested: "warn", step_up_approved: "warn", step_up_timeout: "warn",
+    };
+
+    async function loadMandates() {
+      const res = await fetch("/mandates");
+      const mandates = await res.json();
+      document.getElementById("mandate-cards").innerHTML = mandates.map((m) => {
+        const pct = m.max_cumulative > 0
+          ? Math.min(100, (m.current_cumulative_spend / m.max_cumulative) * 100)
+          : 0;
+        return `<div class="mandate-card status-${m.status}">
+          <div><strong>${m.agent_id}</strong> — ${m.category.join(", ")}</div>
+          <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div>${m.current_cumulative_spend} / ${m.max_cumulative} (${m.status})</div>
+        </div>`;
+      }).join("") || "<em>No mandates yet.</em>";
+    }
+
+    async function loadAuditLog() {
+      const res = await fetch("/audit?limit=50");
+      const { entries } = await res.json();
+      document.getElementById("audit-rows").innerHTML = entries.map((e) => `
+        <tr class="decision-${DECISION_CLASS[e.decision] || ""}">
+          <td>${new Date(e.created_at).toLocaleTimeString()}</td>
+          <td title="${e.mandate_id ?? ''}">${(e.mandate_id ?? '—').slice(0, 8)}</td>
+          <td>${e.agent_id ?? '—'}</td>
+          <td>${e.category ?? '—'}</td>
+          <td>${e.request_amount ?? '—'}</td>
+          <td>${e.decision}</td>
+          <td>${e.reason}</td>
+          <td>${e.order_id ?? '—'}</td>
+          <td>${e.payment_id ?? '—'}</td>
+        </tr>`).join("");
+    }
+
+    function refreshAll() {
+      loadMandates();
+      loadAuditLog();
+    }
+    refreshAll();
+    setInterval(refreshAll, 3000);
+  </script>
+</body>
+</html>

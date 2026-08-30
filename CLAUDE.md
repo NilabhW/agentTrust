@@ -1,7 +1,9 @@
 # Agent Trust Gateway — CLAUDE.md
 
 ## Project status
-Phase 1 (Mandate Service) is implemented: `src/mandate/` (model, canonical serialization, HMAC-SHA256 signer, validation, SQLite-backed store, Fastify routes) plus `src/db/`, `src/config.ts`, `src/app.ts`, `src/server.ts`, and `scripts/seed.ts`. Full Vitest coverage lives in `test/mandate/`. The Verification Gateway, Razorpay integration, and Audit Log/UI (Programs 2-4) are not yet built.
+Phase 1 (Mandate Service) is implemented: `src/mandate/` (model, canonical serialization, HMAC-SHA256 signer, validation, SQLite-backed store, Fastify routes) plus `src/db/`, `src/config.ts`, `src/app.ts`, `src/server.ts`, and `scripts/seed.ts`. Full Vitest coverage lives in `test/mandate/`.
+
+Phase 2 (Audit Log + minimal UI, Program 4) is implemented ahead of the Gateway: `src/audit/` (append-only `audit_log` table with DB-level UPDATE/DELETE triggers, `AuditStore.writeEntry()`/`list()` with cursor pagination and filters, `GET /audit`), `src/ui/` + `public/index.html` (a single static page polling `/mandates` and `/audit` every 3s — mandate-overview progress bars + a color-coded audit table), and `scripts/seed-audit.ts` for demo data. `MandateStore.listAll()` was added and `GET /mandates`'s `user_id` is now optional (omitted = all mandates) to support the overview panel. **Not yet built**: the pending-approvals panel and `GET /mandates/pending-approvals` — deliberately deferred until Program 2 (Verification Gateway) exists, since there's no step-up producer yet. The Verification Gateway and Razorpay integration (Programs 2-3) are not yet built.
 
 ## Project
 A signed-mandate verification layer for Razorpay merchants: a human issues a spending mandate to an AI agent, the Verification Gateway checks every purchase request against that mandate's bounds before calling Razorpay's test-mode API, and every decision is written to an append-only audit trail.
@@ -33,7 +35,7 @@ Stack: Node.js + TypeScript, Fastify, better-sqlite3, Vitest.
 - Run tests: `npm test` — prefer running a single test file while iterating, e.g. `npx vitest run test/mandate/store.test.ts`, not the full suite
 - Run the dev server: `npm run dev` (requires `MANDATE_SIGNING_KEY`, `DB_PATH`, `PORT` env vars — see `.env.example`)
 - Lint/typecheck: `npm run typecheck`
-- Seed demo data: `npm run seed`
+- Seed demo data: `npm run seed` (mandates) then `npm run seed:audit` (audit log entries — requires mandates to exist first)
 
 ## Code style
 - Normalize all Gateway decisions to `{decision: pass | hard_fail | step_up, reason}` — every caller branches on this shape, not on ad-hoc booleans.

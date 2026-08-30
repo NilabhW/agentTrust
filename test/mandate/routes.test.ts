@@ -168,4 +168,41 @@ describe("mandate routes", () => {
       expect(res.json().error).toBe("MANDATE_SIGNATURE_INVALID");
     });
   });
+
+  describe("GET /mandates (no user_id)", () => {
+    it("returns every mandate across all users when the user_id query parameter is omitted", async () => {
+      await app.inject({
+        method: "POST",
+        url: "/mandates",
+        payload: validBody({ user_id: "user-all-1" }),
+      });
+      await app.inject({
+        method: "POST",
+        url: "/mandates",
+        payload: validBody({ user_id: "user-all-2" }),
+      });
+      const res = await app.inject({ method: "GET", url: "/mandates" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toHaveLength(2);
+    });
+
+    it("returns an empty array, not an error, when there are no mandates at all", async () => {
+      const res = await app.inject({ method: "GET", url: "/mandates" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual([]);
+    });
+
+    it("returns 500 with error=MANDATE_SIGNATURE_INVALID when any mandate has been tampered with", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/mandates",
+        payload: validBody({ user_id: "user-all-tampered" }),
+      });
+      const id = created.json().mandate_id;
+      db.prepare("UPDATE mandates SET max_cumulative = ? WHERE mandate_id = ?").run(999999, id);
+      const res = await app.inject({ method: "GET", url: "/mandates" });
+      expect(res.statusCode).toBe(500);
+      expect(res.json().error).toBe("MANDATE_SIGNATURE_INVALID");
+    });
+  });
 });

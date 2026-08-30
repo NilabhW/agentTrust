@@ -245,4 +245,40 @@ describe("MandateStore", () => {
       expect(() => store.listByUser("user-tampered")).toThrow(MandateIntegrityError);
     });
   });
+
+  describe("listAll", () => {
+    it("returns mandates across every user, not just one", () => {
+      store.create(validInput({ user_id: "user-a" }));
+      store.create(validInput({ user_id: "user-b" }));
+      const results = store.listAll();
+      expect(results).toHaveLength(2);
+      expect(results.map((m) => m.user_id).sort()).toEqual(["user-a", "user-b"]);
+    });
+
+    it("reports correct per-item computed status across active, expired, and revoked mandates spanning multiple users", () => {
+      const now = Date.now();
+      store.create(validInput({ user_id: "user-x", expires_at: now + DAY_MS }));
+      store.create(validInput({ user_id: "user-y", expires_at: now + 1000 }));
+      const revokedOne = store.create(validInput({ user_id: "user-z" }));
+      store.revoke(revokedOne.mandate_id);
+
+      const results = store.listAll(now + 2000);
+      const statuses = results.map((m) => m.status).sort();
+      expect(statuses).toEqual(["active", "expired", "revoked"]);
+    });
+
+    it("returns an empty array when no mandates exist", () => {
+      expect(store.listAll()).toEqual([]);
+    });
+
+    it("throws MandateIntegrityError when any mandate in the full set has been tampered with", () => {
+      store.create(validInput({ user_id: "user-a" }));
+      const tampered = store.create(validInput({ user_id: "user-b" }));
+      db.prepare("UPDATE mandates SET max_cumulative = ? WHERE mandate_id = ?").run(
+        999999,
+        tampered.mandate_id
+      );
+      expect(() => store.listAll()).toThrow(MandateIntegrityError);
+    });
+  });
 });

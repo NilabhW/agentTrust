@@ -21,4 +21,8 @@ export class MandateService {
   listByUser(userId: string): Mandate[] {
     return this.store.listByUser(userId);
   }
+
+  listAll(): Mandate[] {
+    return this.store.listAll();
+  }
 }

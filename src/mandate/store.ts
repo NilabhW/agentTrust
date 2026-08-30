@@ -118,6 +118,14 @@ export class MandateStore {
     });
   }
 
+  listAll(now: number = Date.now()): Mandate[] {
+    const rows = this.db.prepare("SELECT * FROM mandates").all() as StoredMandateRow[];
+    return rows.map((row) => {
+      this.verifyRowOrThrow(row);
+      return this.toMandate(row, JSON.parse(row.category) as Category[], now);
+    });
+  }
+
   incrementSpend(mandateId: string, amount: number, now: number = Date.now()): void {
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new ValidationError("amount must be a positive finite number");

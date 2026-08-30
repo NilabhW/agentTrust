@@ -54,11 +54,8 @@ export async function mandateRoutes(fastify: FastifyInstance, opts: MandateRoute
 
   fastify.get<{ Querystring: { user_id?: string } }>("/mandates", async (request, reply) => {
     const userId = request.query.user_id;
-    if (!userId) {
-      return reply.code(400).send({ error: "user_id query parameter is required" });
-    }
     try {
-      const mandates = service.listByUser(userId);
+      const mandates = userId ? service.listByUser(userId) : service.listAll();
       return reply.code(200).send(mandates);
     } catch (err) {
       if (err instanceof MandateIntegrityError) {
