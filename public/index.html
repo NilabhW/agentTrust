@@ -29,7 +29,21 @@
     <div id="mandate-cards"></div>
   </section>
 
-  <!-- Pending-approvals panel: deferred until Program 2 (Verification Gateway) exists -->
+  <section id="pending-approvals">
+    <h2>Pending Step-Ups</h2>
+    <!-- Read-only for now: approve/deny buttons are deferred until this
+         panel gets real UX design. Polling this endpoint here still matters
+         functionally -- it's what triggers lazy timeout-materialization
+         (see GatewayService.listPendingApprovals) for any step-up nobody
+         acts on, so an abandoned request doesn't sit "pending" forever with
+         no terminal audit entry. -->
+    <table>
+      <thead>
+        <tr><th>Requested</th><th>Mandate</th><th>Agent</th><th>Category</th><th>Amount</th><th>Item</th></tr>
+      </thead>
+      <tbody id="pending-rows"></tbody>
+    </table>
+  </section>
 
   <section id="audit-log">
     <h2>Audit Log</h2>
@@ -51,6 +65,12 @@
       step_up_requested: "warn", step_up_approved: "warn", step_up_timeout: "warn",
     };
 
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[ch]));
+    }
+
     async function loadMandates() {
       const res = await fetch("/mandates");
       const mandates = await res.json();
@@ -58,12 +78,26 @@
         const pct = m.max_cumulative > 0
           ? Math.min(100, (m.current_cumulative_spend / m.max_cumulative) * 100)
           : 0;
-        return `<div class="mandate-card status-${m.status}">
-          <div><strong>${m.agent_id}</strong> — ${m.category.join(", ")}</div>
+        return `<div class="mandate-card status-${escapeHtml(m.status)}">
+          <div><strong>${escapeHtml(m.agent_id)}</strong> — ${escapeHtml(m.category.join(", "))}</div>
           <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-          <div>${m.current_cumulative_spend} / ${m.max_cumulative} (${m.status})</div>
+          <div>${escapeHtml(m.current_cumulative_spend)} / ${escapeHtml(m.max_cumulative)} (${escapeHtml(m.status)})</div>
         </div>`;
       }).join("") || "<em>No mandates yet.</em>";
+    }
+
+    async function loadPendingApprovals() {
+      const res = await fetch("/gateway/pending-approvals");
+      const approvals = await res.json();
+      document.getElementById("pending-rows").innerHTML = approvals.map((p) => `
+        <tr>
+          <td>${new Date(p.requested_at).toLocaleTimeString()}</td>
+          <td title="${escapeHtml(p.mandate_id)}">${escapeHtml(p.mandate_id.slice(0, 8))}</td>
+          <td>${escapeHtml(p.agent_id)}</td>
+          <td>${escapeHtml(p.category)}</td>
+          <td>${escapeHtml(p.amount)}</td>
+          <td>${escapeHtml(p.item_description)}</td>
+        </tr>`).join("") || "";
     }
 
     async function loadAuditLog() {
@@ -72,19 +106,20 @@
       document.getElementById("audit-rows").innerHTML = entries.map((e) => `
         <tr class="decision-${DECISION_CLASS[e.decision] || ""}">
           <td>${new Date(e.created_at).toLocaleTimeString()}</td>
-          <td title="${e.mandate_id ?? ''}">${(e.mandate_id ?? '—').slice(0, 8)}</td>
-          <td>${e.agent_id ?? '—'}</td>
-          <td>${e.category ?? '—'}</td>
-          <td>${e.request_amount ?? '—'}</td>
-          <td>${e.decision}</td>
-          <td>${e.reason}</td>
-          <td>${e.order_id ?? '—'}</td>
-          <td>${e.payment_id ?? '—'}</td>
+          <td title="${escapeHtml(e.mandate_id ?? '')}">${escapeHtml((e.mandate_id ?? '—').slice(0, 8))}</td>
+          <td>${escapeHtml(e.agent_id ?? '—')}</td>
+          <td>${escapeHtml(e.category ?? '—')}</td>
+          <td>${escapeHtml(e.request_amount ?? '—')}</td>
+          <td>${escapeHtml(e.decision)}</td>
+          <td>${escapeHtml(e.reason)}</td>
+          <td>${escapeHtml(e.order_id ?? '—')}</td>
+          <td>${escapeHtml(e.payment_id ?? '—')}</td>
         </tr>`).join("");
     }
 
     function refreshAll() {
       loadMandates();
+      loadPendingApprovals();
       loadAuditLog();
     }
     refreshAll();

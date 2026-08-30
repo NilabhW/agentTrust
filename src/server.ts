@@ -3,7 +3,12 @@ import { createDb } from "./db/client";
 import { buildApp } from "./app";
 
 const db = createDb(config.dbPath);
-const app = buildApp({ db, signingKey: config.mandateSigningKey });
+const app = buildApp({
+  db,
+  signingKey: config.mandateSigningKey,
+  replaySkewMs: config.replaySkewMs,
+  stepUpTimeoutMs: config.stepUpTimeoutMs,
+});
 
 app
   .listen({ port: config.port, host: "0.0.0.0" })

@@ -51,3 +51,20 @@ BEGIN SELECT RAISE(ABORT, 'audit_log is append-only: UPDATE is not permitted'); 
 CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_delete
 BEFORE DELETE ON audit_log
 BEGIN SELECT RAISE(ABORT, 'audit_log is append-only: DELETE is not permitted'); END;
+
+CREATE TABLE IF NOT EXISTS pending_approvals (
+  id                TEXT PRIMARY KEY,
+  mandate_id        TEXT NOT NULL REFERENCES mandates(mandate_id),
+  agent_id          TEXT NOT NULL,
+  amount            REAL NOT NULL CHECK (amount > 0),
+  category          TEXT NOT NULL,
+  item_description  TEXT NOT NULL,
+  requested_at      INTEGER NOT NULL,
+  expires_at        INTEGER NOT NULL,
+  status            TEXT NOT NULL CHECK (status IN ('pending','approved','denied')) DEFAULT 'pending',
+  resolved_at       INTEGER,
+  timed_out         INTEGER NOT NULL CHECK (timed_out IN (0,1)) DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_approvals_mandate_id ON pending_approvals(mandate_id);
+CREATE INDEX IF NOT EXISTS idx_pending_approvals_status ON pending_approvals(status);
