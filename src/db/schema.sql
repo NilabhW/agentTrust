@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
   category        TEXT,
   decision        TEXT NOT NULL CHECK (decision IN (
                     'pass','hard_fail','step_up_requested','step_up_approved',
-                    'step_up_denied','step_up_timeout','order_created','payment_failed'
+                    'step_up_denied','step_up_timeout','order_created',
+                    'payment_captured','payment_failed'
                   )),
   reason          TEXT NOT NULL CHECK (length(trim(reason)) > 0),
   order_id        TEXT,
@@ -68,3 +69,20 @@ CREATE TABLE IF NOT EXISTS pending_approvals (
 
 CREATE INDEX IF NOT EXISTS idx_pending_approvals_mandate_id ON pending_approvals(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_pending_approvals_status ON pending_approvals(status);
+
+CREATE TABLE IF NOT EXISTS orders (
+  order_id    TEXT PRIMARY KEY,
+  mandate_id  TEXT NOT NULL REFERENCES mandates(mandate_id),
+  agent_id    TEXT NOT NULL,
+  amount      REAL NOT NULL CHECK (amount > 0),
+  currency    TEXT NOT NULL DEFAULT 'INR',
+  category    TEXT NOT NULL,
+  receipt     TEXT NOT NULL UNIQUE,
+  status      TEXT NOT NULL CHECK (status IN ('created','paid','failed')) DEFAULT 'created',
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  payment_id  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_mandate_id ON orders(mandate_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);

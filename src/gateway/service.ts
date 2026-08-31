@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { MandateStore } from "../mandate/store";
 import { MandateIntegrityError, MandateNotFoundError } from "../mandate/errors";
 import { Mandate } from "../mandate/types";
@@ -9,10 +10,19 @@ import { evaluateBounds } from "./bounds";
 import { verifyAgentSignature, AgentSignedPayload } from "./agent-signature";
 import { validateVerifyRequestBody } from "./validation";
 import { GatewayDecisionResult, PendingApproval } from "./types";
+import { RazorpayClient } from "../razorpay/client";
+import { OrdersStore } from "../razorpay/orders-store";
 
 export interface ResolveOutcome {
   httpStatus: number;
   approval: PendingApproval;
+}
+
+interface OrderAttempt {
+  mandateId: string;
+  agentId: string;
+  amount: number;
+  category: string;
 }
 
 export class GatewayService {
@@ -20,10 +30,12 @@ export class GatewayService {
     private readonly mandateStore: MandateStore,
     private readonly auditStore: AuditStore,
     private readonly pendingApprovalStore: PendingApprovalStore,
-    private readonly replayGuard: ReplayGuard
+    private readonly replayGuard: ReplayGuard,
+    private readonly razorpayClient?: RazorpayClient,
+    private readonly ordersStore?: OrdersStore
   ) {}
 
-  verify(input: unknown, now: number = Date.now()): GatewayDecisionResult {
+  async verify(input: unknown, now: number = Date.now()): Promise<GatewayDecisionResult> {
     const body = validateVerifyRequestBody(input);
 
     const mandate = (() => {
@@ -116,7 +128,16 @@ export class GatewayService {
         reason: bounds.reason,
         now,
       });
-      return { decision: "pass", reason: bounds.reason, order_id: null };
+      const order_id = await this.tryCreateOrder(
+        {
+          mandateId: mandate.mandate_id,
+          agentId: mandate.agent_id,
+          amount: body.amount,
+          category: body.category,
+        },
+        now
+      );
+      return { decision: "pass", reason: bounds.reason, order_id };
     }
 
     if (bounds.decision === "hard_fail") {
@@ -154,7 +175,7 @@ export class GatewayService {
     return { decision: "step_up", reason: bounds.reason, order_id: null, pending_approval_id: approval.id };
   }
 
-  approveStepUp(id: string, now: number = Date.now()): ResolveOutcome {
+  async approveStepUp(id: string, now: number = Date.now()): Promise<ResolveOutcome> {
     // Read-only check first (materializes a timeout if the row has expired,
     // via the same exactly-once guard the store uses everywhere else).
     const current = this.pendingApprovalStore.getById(id, now);
@@ -209,6 +230,15 @@ export class GatewayService {
     }
 
     this.writeApprovalAudit(result.approval, "step_up_approved", "human approved step-up request", now);
+    await this.tryCreateOrder(
+      {
+        mandateId: result.approval.mandate_id,
+        agentId: result.approval.agent_id,
+        amount: result.approval.amount,
+        category: result.approval.category,
+      },
+      now
+    );
     return { httpStatus: 200, approval: result.approval };
   }
 
@@ -233,6 +263,63 @@ export class GatewayService {
       this.writeApprovalAudit(approval, "step_up_timeout", "step-up request unanswered past timeout, auto-denied", now);
     }
     return result.approvals;
+  }
+
+  // Called only after spend has already been incremented (pass / step-up
+  // approved), per the safety-ordering established in Phase 3: Program 3's
+  // call belongs after incrementSpend, never between the bounds check and
+  // the increment. Consequence, documented in CLAUDE.md as an accepted
+  // limitation: if create_order() itself fails here, the spend is already
+  // committed against the mandate's cap even though no order exists.
+  private async tryCreateOrder(attempt: OrderAttempt, now: number): Promise<string | null> {
+    if (!this.razorpayClient || !this.ordersStore) return null;
+
+    const receipt = randomUUID();
+    const result = await this.razorpayClient.createOrder({
+      mandate_id: attempt.mandateId,
+      agent_id: attempt.agentId,
+      amount: attempt.amount,
+      category: attempt.category,
+      receipt,
+    });
+
+    if (result.status === "failed") {
+      this.writeAudit({
+        mandateId: attempt.mandateId,
+        agentId: attempt.agentId,
+        amount: attempt.amount,
+        category: attempt.category,
+        decision: "payment_failed",
+        reason: `order creation failed: ${result.raw_error}`,
+        now,
+      });
+      return null;
+    }
+
+    this.ordersStore.create(
+      {
+        order_id: result.order_id,
+        mandate_id: attempt.mandateId,
+        agent_id: attempt.agentId,
+        amount: attempt.amount,
+        category: attempt.category,
+        receipt,
+      },
+      now
+    );
+
+    this.writeAudit({
+      mandateId: attempt.mandateId,
+      agentId: attempt.agentId,
+      amount: attempt.amount,
+      category: attempt.category,
+      decision: "order_created",
+      reason: "Razorpay order created",
+      now,
+      orderId: result.order_id,
+    });
+
+    return result.order_id;
   }
 
   private writeApprovalAudit(
@@ -260,6 +347,7 @@ export class GatewayService {
     decision: Decision;
     reason: string;
     now: number;
+    orderId?: string;
   }): void {
     this.auditStore.writeEntry({
       mandate_id: input.mandateId,
@@ -269,6 +357,7 @@ export class GatewayService {
       decision: input.decision,
       reason: input.reason,
       created_at: input.now,
+      order_id: input.orderId ?? null,
     });
   }
 }

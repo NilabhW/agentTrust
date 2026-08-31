@@ -15,9 +15,11 @@ export type GatewayDecisionKind = "pass" | "hard_fail" | "step_up";
 export interface GatewayDecisionResult {
   decision: GatewayDecisionKind;
   reason: string;
-  // Always null in this phase — Program 3 (Razorpay) doesn't exist yet, so a
-  // "pass" decision never creates an order. This is exactly where Program 3
-  // plugs in later: populate order_id after a successful order_created call.
+  // Populated with a real Razorpay order id when Program 3 is configured
+  // (RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET set) and create_order() succeeds
+  // after a pass decision; null otherwise (Razorpay not configured, a
+  // hard_fail/step_up decision, or a create_order() failure -- see the
+  // payment_failed audit entry for that last case).
   order_id: string | null;
   pending_approval_id?: string;
 }

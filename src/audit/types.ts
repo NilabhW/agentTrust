@@ -6,6 +6,7 @@ export const DECISIONS = [
   "step_up_denied",
   "step_up_timeout",
   "order_created",
+  "payment_captured",
   "payment_failed",
 ] as const;
 

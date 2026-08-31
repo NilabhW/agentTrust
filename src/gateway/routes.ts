@@ -12,7 +12,7 @@ export async function gatewayRoutes(fastify: FastifyInstance, opts: GatewayRoute
 
   fastify.post("/gateway/verify", async (request, reply) => {
     try {
-      const { pending_approval_id: _internalOnly, ...result } = service.verify(request.body);
+      const { pending_approval_id: _internalOnly, ...result } = await service.verify(request.body);
       // pending_approval_id is deliberately withheld from the agent-facing
       // response: the approve/deny endpoints have no separate operator
       // credential, so handing the agent its own approval id would let it
@@ -34,7 +34,7 @@ export async function gatewayRoutes(fastify: FastifyInstance, opts: GatewayRoute
     "/gateway/pending-approvals/:id/approve",
     async (request, reply) => {
       try {
-        const { httpStatus, approval } = service.approveStepUp(request.params.id);
+        const { httpStatus, approval } = await service.approveStepUp(request.params.id);
         return reply.code(httpStatus).send(approval);
       } catch (err) {
         if (err instanceof PendingApprovalNotFoundError) {

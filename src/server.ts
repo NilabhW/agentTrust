@@ -8,6 +8,9 @@ const app = buildApp({
   signingKey: config.mandateSigningKey,
   replaySkewMs: config.replaySkewMs,
   stepUpTimeoutMs: config.stepUpTimeoutMs,
+  razorpayKeyId: config.razorpayKeyId,
+  razorpayKeySecret: config.razorpayKeySecret,
+  razorpayWebhookSecret: config.razorpayWebhookSecret,
 });
 
 app
