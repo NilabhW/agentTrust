@@ -1,62 +1,206 @@
 <!doctype html>
 <html>
 <head>
-<title>Agent Trust Gateway — Audit Log</title>
+<meta charset="utf-8" />
+<title>Agent Trust Gateway</title>
 <style>
-  body { font-family: -apple-system, sans-serif; margin: 2rem; background: #f7f7f8; color: #1a1a1a; }
-  h1 { font-size: 1.4rem; }
-  h2 { font-size: 1.1rem; margin-top: 2rem; }
-  section { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; }
-  #mandate-cards { display: flex; flex-wrap: wrap; gap: 1rem; }
-  .mandate-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem 1rem; min-width: 220px; }
-  .mandate-card.status-active { border-left: 4px solid #2e7d32; }
-  .mandate-card.status-expired { border-left: 4px solid #999; }
-  .mandate-card.status-revoked { border-left: 4px solid #999; opacity: 0.6; }
-  .bar { background: #eee; border-radius: 4px; height: 8px; margin: 0.4rem 0; overflow: hidden; }
-  .bar-fill { background: #2e7d32; height: 100%; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; }
-  tr.decision-ok { background: #eaf6ea; }
-  tr.decision-bad { background: #fbeaea; }
-  tr.decision-warn { background: #fdf6e3; }
+  :root {
+    --bg-a: #eef2fd;
+    --bg-b: #f8fafc;
+    --card: #ffffff;
+    --border: #e6eaf3;
+    --text: #0f172a;
+    --text-soft: #64748b;
+    --primary: #2f5fff;
+    --primary-dark: #1d3fd6;
+    --ok-fg: #15803d;
+    --ok-bg: #e8f7ee;
+    --bad-fg: #b91c1c;
+    --bad-bg: #fdecec;
+    --warn-fg: #b45309;
+    --warn-bg: #fef3e2;
+    --radius-lg: 20px;
+    --radius-md: 12px;
+    --shadow: 0 12px 32px -16px rgba(15, 23, 42, 0.18);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    color: var(--text);
+    background: linear-gradient(160deg, var(--bg-a), var(--bg-b) 55%);
+    min-height: 100vh;
+  }
+  .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+  .brand-icon {
+    width: 34px; height: 34px; border-radius: 10px; background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 1rem; box-shadow: var(--shadow);
+  }
+  .tagline { color: var(--text-soft); font-size: 0.85rem; max-width: 360px; text-align: right; }
+
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow); padding: 24px 28px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 1rem; margin: 0 0 16px; font-weight: 700; }
+  .panel h2 .sub { font-weight: 400; color: var(--text-soft); font-size: 0.8rem; margin-left: 8px; }
+
+  .two-col { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Mandate cards */
+  .mandate-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .mandate-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; position: relative; overflow: hidden; }
+  .mandate-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--primary); }
+  .mandate-card.status-revoked::before, .mandate-card.status-expired::before { background: #94a3b8; }
+  .mandate-card .row1 { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+  .mandate-card .agent { font-weight: 700; font-size: 0.95rem; }
+  .pill { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; }
+  .pill.status-active { background: var(--ok-bg); color: var(--ok-fg); }
+  .pill.status-revoked, .pill.status-expired { background: #f1f5f9; color: #64748b; }
+  .cats { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 4px; }
+  .cat-tag { font-size: 0.68rem; background: #eef2ff; color: #3346a8; padding: 2px 8px; border-radius: 999px; }
+  .bar { background: #eef1f7; border-radius: 999px; height: 8px; margin: 10px 0 6px; overflow: hidden; }
+  .bar-fill { background: linear-gradient(90deg, var(--primary), #7c9bff); height: 100%; border-radius: 999px; }
+  .spend-line { font-size: 0.78rem; color: var(--text-soft); display: flex; justify-content: space-between; }
+
+  /* Form */
+  form.purchase-form { display: flex; flex-direction: column; gap: 12px; }
+  .field label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-soft); margin-bottom: 4px; }
+  .field input, .field select {
+    width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border);
+    font-size: 0.9rem; background: #f9fafc; color: var(--text);
+  }
+  .field input:focus, .field select:focus { outline: 2px solid var(--primary); outline-offset: 1px; background: #fff; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .btn { border: none; border-radius: var(--radius-md); font-weight: 700; font-size: 0.85rem; cursor: pointer; padding: 10px 16px; }
+  .btn-primary { background: var(--primary); color: #fff; width: 100%; padding: 13px 16px; font-size: 0.95rem; box-shadow: 0 10px 20px -10px rgba(47, 95, 255, 0.6); }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .btn-bad { background: var(--bad-bg); color: var(--bad-fg); }
+  .btn-sm { padding: 6px 12px; font-size: 0.75rem; border-radius: 8px; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  .result-card { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  .result-card .decision-badge { display: inline-block; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 3px 10px; border-radius: 999px; margin-bottom: 6px; }
+  .decision-badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .decision-badge.bad { background: var(--bad-bg); color: var(--bad-fg); }
+  .decision-badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .result-card .reason { font-size: 0.85rem; color: var(--text-soft); }
+  .result-card .meta { margin-top: 6px; font-size: 0.78rem; color: var(--text-soft); }
+
+  /* Pending approvals */
+  .pending-list { display: flex; flex-direction: column; gap: 10px; }
+  .pending-item { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; }
+  .pending-item .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .pending-item .desc { font-weight: 600; font-size: 0.88rem; }
+  .pending-item .sub { color: var(--text-soft); font-size: 0.76rem; margin-top: 2px; }
+  .pending-item .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .empty-note { color: var(--text-soft); font-size: 0.85rem; font-style: italic; }
+
+  .countdown { display: flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .countdown .box { background: #0f172a; color: #fff; font-weight: 700; border-radius: 7px; padding: 3px 7px; font-size: 0.75rem; min-width: 22px; text-align: center; }
+  .countdown .sep { font-weight: 700; color: #0f172a; }
+  .countdown.expired .box { background: #94a3b8; }
+
+  /* Audit table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.76rem; table-layout: fixed; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.reason-cell { white-space: normal; overflow-wrap: break-word; }
+  th { color: var(--text-soft); font-weight: 600; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  th:nth-child(1), td:nth-child(1) { width: 9%; }
+  th:nth-child(2), td:nth-child(2) { width: 6%; }
+  th:nth-child(3), td:nth-child(3) { width: 11%; }
+  th:nth-child(4), td:nth-child(4) { width: 9%; }
+  th:nth-child(5), td:nth-child(5) { width: 6%; }
+  th:nth-child(6), td:nth-child(6) { width: 16%; }
+  th:nth-child(7), td:nth-child(7) { width: 18%; }
+  th:nth-child(8), td:nth-child(8) { width: 8%; }
+  th:nth-child(9), td:nth-child(9) { width: 7%; }
+  th:nth-child(10), td:nth-child(10) { width: 10%; }
+  th:last-child, td:last-child { overflow: visible; }
+  tr.decision-ok td:first-child, tr.decision-bad td:first-child, tr.decision-warn td:first-child { border-left: 3px solid transparent; }
+  tr.decision-ok { background: #f7fcf9; }
+  tr.decision-bad { background: #fdf7f7; }
+  tr.decision-warn { background: #fffaf2; }
+  .badge { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0; padding: 2px 6px; border-radius: 999px; white-space: nowrap; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .badge.bad { background: var(--bad-bg); color: var(--bad-fg); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .settle-btns { display: flex; gap: 4px; flex-wrap: nowrap; }
+  .settle-btns .btn-sm { padding: 3px 6px; font-size: 0.62rem; white-space: nowrap; }
 </style>
 </head>
 <body>
-  <h1>Agent Trust Gateway</h1>
+  <div class="page">
+    <div class="topbar">
+      <div class="brand"><span class="brand-icon">&#9670;</span> Agent Trust Gateway</div>
+      <div class="tagline">Every agent purchase is checked against a signed spending mandate before money moves.</div>
+    </div>
 
-  <section id="mandate-overview">
-    <h2>Mandate Overview</h2>
-    <div id="mandate-cards"></div>
-  </section>
+    <section class="panel" id="mandate-overview">
+      <h2>Mandate Overview</h2>
+      <div id="mandate-cards" class="mandate-grid"></div>
+    </section>
 
-  <section id="pending-approvals">
-    <h2>Pending Step-Ups</h2>
-    <!-- Read-only for now: approve/deny buttons are deferred until this
-         panel gets real UX design. Polling this endpoint here still matters
-         functionally -- it's what triggers lazy timeout-materialization
-         (see GatewayService.listPendingApprovals) for any step-up nobody
-         acts on, so an abandoned request doesn't sit "pending" forever with
-         no terminal audit entry. -->
-    <table>
-      <thead>
-        <tr><th>Requested</th><th>Mandate</th><th>Agent</th><th>Category</th><th>Amount</th><th>Item</th></tr>
-      </thead>
-      <tbody id="pending-rows"></tbody>
-    </table>
-  </section>
+    <div class="two-col">
+      <section class="panel" id="simulate-purchase">
+        <h2>Simulate Agent Purchase</h2>
+        <form class="purchase-form" id="purchase-form">
+          <div class="field">
+            <label for="pf-mandate">Agent / Mandate</label>
+            <select id="pf-mandate"></select>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="pf-category">Category</label>
+              <select id="pf-category">
+                <option value="groceries">groceries</option>
+                <option value="food_delivery">food_delivery</option>
+                <option value="subscriptions">subscriptions</option>
+                <option value="electronics">electronics</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="pf-amount">Amount (INR)</label>
+              <input id="pf-amount" type="number" min="1" step="1" value="500" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="pf-item">Item description</label>
+            <input id="pf-item" type="text" value="weekly groceries" />
+          </div>
+          <button type="submit" class="btn btn-primary">Send Purchase Request</button>
+        </form>
+        <div id="purchase-result" class="result-card" hidden></div>
+      </section>
 
-  <section id="audit-log">
-    <h2>Audit Log</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Time</th><th>Mandate</th><th>Agent</th><th>Category</th>
-          <th>Amount</th><th>Decision</th><th>Reason</th><th>Order</th><th>Payment</th>
-        </tr>
-      </thead>
-      <tbody id="audit-rows"></tbody>
-    </table>
-  </section>
+      <section class="panel" id="pending-approvals">
+        <h2>Pending Step-Ups <span class="sub">awaiting human approval</span></h2>
+        <div id="pending-list" class="pending-list"></div>
+      </section>
+    </div>
+
+    <section class="panel" id="audit-log">
+      <h2>Audit Log</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th><th>Mandate</th><th>Agent</th><th>Category</th>
+              <th>Amount</th><th>Decision</th><th>Reason</th><th>Order</th><th>Payment</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="audit-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 
   <script>
     const DECISION_CLASS = {
@@ -71,6 +215,11 @@
       }[ch]));
     }
 
+    function fmtMoney(n) {
+      if (n === null || n === undefined) return "—";
+      return "₹" + Number(n).toLocaleString("en-IN");
+    }
+
     async function loadMandates() {
       const res = await fetch("/mandates");
       const mandates = await res.json();
@@ -79,51 +228,162 @@
           ? Math.min(100, (m.current_cumulative_spend / m.max_cumulative) * 100)
           : 0;
         return `<div class="mandate-card status-${escapeHtml(m.status)}">
-          <div><strong>${escapeHtml(m.agent_id)}</strong> — ${escapeHtml(m.category.join(", "))}</div>
+          <div class="row1">
+            <span class="agent">${escapeHtml(m.agent_id)}</span>
+            <span class="pill status-${escapeHtml(m.status)}">${escapeHtml(m.status)}</span>
+          </div>
+          <div class="cats">${m.category.map((c) => `<span class="cat-tag">${escapeHtml(c)}</span>`).join("")}</div>
           <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-          <div>${escapeHtml(m.current_cumulative_spend)} / ${escapeHtml(m.max_cumulative)} (${escapeHtml(m.status)})</div>
+          <div class="spend-line"><span>${fmtMoney(m.current_cumulative_spend)} spent</span><span>cap ${fmtMoney(m.max_cumulative)}</span></div>
         </div>`;
-      }).join("") || "<em>No mandates yet.</em>";
+      }).join("") || `<span class="empty-note">No mandates yet -- run \`npm run seed\`.</span>`;
+    }
+
+    let demoAgents = [];
+    async function loadDemoAgents() {
+      const res = await fetch("/demo/agents");
+      demoAgents = await res.json();
+      const select = document.getElementById("pf-mandate");
+      select.innerHTML = demoAgents.map((a) =>
+        `<option value="${escapeHtml(a.mandate_id)}">${escapeHtml(a.agent_id)} — ${escapeHtml(a.category.join(", "))} (${fmtMoney(a.current_cumulative_spend)}/${fmtMoney(a.max_cumulative)})</option>`
+      ).join("") || `<option value="">No demo agents -- run \`npm run seed\`</option>`;
+    }
+
+    function renderPurchaseResult(result, error) {
+      const box = document.getElementById("purchase-result");
+      box.hidden = false;
+      if (error) {
+        box.innerHTML = `<span class="decision-badge bad">error</span><div class="reason">${escapeHtml(error)}</div>`;
+        return;
+      }
+      const cls = DECISION_CLASS[result.decision] || "warn";
+      const label = result.decision === "step_up" ? "Step-Up Required" : result.decision.replace("_", " ");
+      let meta = "";
+      if (result.order_id) meta += `Razorpay order: <strong>${escapeHtml(result.order_id)}</strong>`;
+      if (result.decision === "step_up") meta += "See “Pending Step-Ups” below to approve or deny.";
+      box.innerHTML = `<span class="decision-badge ${cls}">${escapeHtml(label)}</span>
+        <div class="reason">${escapeHtml(result.reason)}</div>
+        ${meta ? `<div class="meta">${meta}</div>` : ""}`;
+    }
+
+    document.getElementById("purchase-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const mandate_id = document.getElementById("pf-mandate").value;
+      if (!mandate_id) { renderPurchaseResult(null, "No demo mandate selected."); return; }
+      const body = {
+        mandate_id,
+        amount: Number(document.getElementById("pf-amount").value),
+        category: document.getElementById("pf-category").value,
+        item_description: document.getElementById("pf-item").value,
+      };
+      const res = await fetch("/demo/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { renderPurchaseResult(null, data.error || "Request failed"); return; }
+      renderPurchaseResult(data);
+      refreshAll();
+    });
+
+    function countdownHtml(expiresAt) {
+      const remainingMs = Math.max(0, expiresAt - Date.now());
+      const totalSec = Math.floor(remainingMs / 1000);
+      const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+      const ss = String(totalSec % 60).padStart(2, "0");
+      const expiredCls = remainingMs <= 0 ? " expired" : "";
+      return `<div class="countdown${expiredCls}" data-expires="${expiresAt}">
+        <span class="box">${mm}</span><span class="sep">:</span><span class="box">${ss}</span>
+      </div>`;
+    }
+
+    async function resolveApproval(id, action) {
+      await fetch(`/gateway/pending-approvals/${id}/${action}`, { method: "POST" });
+      refreshAll();
     }
 
     async function loadPendingApprovals() {
       const res = await fetch("/gateway/pending-approvals");
       const approvals = await res.json();
-      document.getElementById("pending-rows").innerHTML = approvals.map((p) => `
-        <tr>
-          <td>${new Date(p.requested_at).toLocaleTimeString()}</td>
-          <td title="${escapeHtml(p.mandate_id)}">${escapeHtml(p.mandate_id.slice(0, 8))}</td>
-          <td>${escapeHtml(p.agent_id)}</td>
-          <td>${escapeHtml(p.category)}</td>
-          <td>${escapeHtml(p.amount)}</td>
-          <td>${escapeHtml(p.item_description)}</td>
-        </tr>`).join("") || "";
+      const list = document.getElementById("pending-list");
+      if (approvals.length === 0) {
+        list.innerHTML = `<span class="empty-note">No purchases are waiting on a human right now.</span>`;
+        return;
+      }
+      list.innerHTML = approvals.map((p) => `
+        <div class="pending-item">
+          <div class="top">
+            <div>
+              <div class="desc">${escapeHtml(p.agent_id)} — ${fmtMoney(p.amount)} · ${escapeHtml(p.category)}</div>
+              <div class="sub">${escapeHtml(p.item_description)}</div>
+            </div>
+            ${countdownHtml(p.expires_at)}
+          </div>
+          <div class="actions">
+            <button class="btn btn-sm btn-ok" onclick="resolveApproval('${p.id}','approve')">Approve</button>
+            <button class="btn btn-sm btn-bad" onclick="resolveApproval('${p.id}','deny')">Deny</button>
+          </div>
+        </div>`).join("");
+    }
+
+    async function settleOrder(orderId, outcome) {
+      await fetch("/demo/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId, outcome }),
+      });
+      refreshAll();
     }
 
     async function loadAuditLog() {
       const res = await fetch("/audit?limit=50");
       const { entries } = await res.json();
-      document.getElementById("audit-rows").innerHTML = entries.map((e) => `
-        <tr class="decision-${DECISION_CLASS[e.decision] || ""}">
-          <td>${new Date(e.created_at).toLocaleTimeString()}</td>
-          <td title="${escapeHtml(e.mandate_id ?? '')}">${escapeHtml((e.mandate_id ?? '—').slice(0, 8))}</td>
-          <td>${escapeHtml(e.agent_id ?? '—')}</td>
-          <td>${escapeHtml(e.category ?? '—')}</td>
-          <td>${escapeHtml(e.request_amount ?? '—')}</td>
-          <td>${escapeHtml(e.decision)}</td>
-          <td>${escapeHtml(e.reason)}</td>
-          <td>${escapeHtml(e.order_id ?? '—')}</td>
-          <td>${escapeHtml(e.payment_id ?? '—')}</td>
-        </tr>`).join("");
+      const settledOrderIds = new Set(
+        entries.filter((e) => e.decision === "payment_captured" || e.decision === "payment_failed").map((e) => e.order_id)
+      );
+      document.getElementById("audit-rows").innerHTML = entries.map((e) => {
+        const canSettle = e.decision === "order_created" && e.order_id && !settledOrderIds.has(e.order_id);
+        const settleButtons = canSettle
+          ? `<div class="settle-btns">
+               <button class="btn btn-sm btn-ok" onclick="settleOrder('${escapeHtml(e.order_id)}','paid')">Paid</button>
+               <button class="btn btn-sm btn-bad" onclick="settleOrder('${escapeHtml(e.order_id)}','failed')">Failed</button>
+             </div>`
+          : "";
+        return `<tr class="decision-${DECISION_CLASS[e.decision] || ""}">
+          <td title="${new Date(e.created_at).toLocaleString()}">${new Date(e.created_at).toLocaleTimeString()}</td>
+          <td title="${escapeHtml(e.mandate_id ?? '')}">${escapeHtml((e.mandate_id ?? '—').slice(0, 6))}</td>
+          <td title="${escapeHtml(e.agent_id ?? '')}">${escapeHtml(e.agent_id ?? '—')}</td>
+          <td title="${escapeHtml(e.category ?? '')}">${escapeHtml(e.category ?? '—')}</td>
+          <td>${e.request_amount != null ? fmtMoney(e.request_amount) : '—'}</td>
+          <td><span class="badge ${DECISION_CLASS[e.decision] || ''}">${escapeHtml(e.decision)}</span></td>
+          <td class="reason-cell" title="${escapeHtml(e.reason)}">${escapeHtml(e.reason)}</td>
+          <td title="${escapeHtml(e.order_id ?? '')}">${escapeHtml(e.order_id ?? '—')}</td>
+          <td title="${escapeHtml(e.payment_id ?? '')}">${escapeHtml(e.payment_id ?? '—')}</td>
+          <td>${settleButtons}</td>
+        </tr>`;
+      }).join("");
     }
 
     function refreshAll() {
       loadMandates();
+      loadDemoAgents();
       loadPendingApprovals();
       loadAuditLog();
     }
     refreshAll();
     setInterval(refreshAll, 3000);
+    setInterval(() => {
+      document.querySelectorAll(".countdown").forEach((el) => {
+        const expiresAt = Number(el.dataset.expires);
+        const remainingMs = Math.max(0, expiresAt - Date.now());
+        const totalSec = Math.floor(remainingMs / 1000);
+        const boxes = el.querySelectorAll(".box");
+        boxes[0].textContent = String(Math.floor(totalSec / 60)).padStart(2, "0");
+        boxes[1].textContent = String(totalSec % 60).padStart(2, "0");
+        el.classList.toggle("expired", remainingMs <= 0);
+      });
+    }, 1000);
   </script>
 </body>
 </html>

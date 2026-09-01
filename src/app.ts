@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from "fastify";
 import type Database from "better-sqlite3";
+import path from "node:path";
 import { createMandateStore } from "./mandate/store";
 import { MandateService } from "./mandate/service";
 import { mandateRoutes } from "./mandate/routes";
@@ -15,6 +16,7 @@ import { RazorpayClient } from "./razorpay/client";
 import { createOrdersStore } from "./razorpay/orders-store";
 import { WebhookService } from "./razorpay/webhook-service";
 import { razorpayRoutes } from "./razorpay/routes";
+import { demoRoutes } from "./demo/routes";
 
 export interface BuildAppOptions {
   db: Database.Database;
@@ -55,13 +57,21 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
   );
   fastify.register(gatewayRoutes, { service: gatewayService });
 
+  const webhookService = new WebhookService(ordersStore, auditStore);
+
   if (opts.razorpayWebhookSecret) {
-    const webhookService = new WebhookService(ordersStore, auditStore);
     fastify.register(razorpayRoutes, {
       webhookService,
       webhookSecret: opts.razorpayWebhookSecret,
     });
   }
+
+  fastify.register(demoRoutes, {
+    gatewayService,
+    webhookService,
+    mandateStore,
+    demoKeysPath: path.join(process.cwd(), "data", "demo-keys.json"),
+  });
 
   fastify.register(uiRoutes);
 
