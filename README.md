@@ -1,6 +1,6 @@
 # Agent Trust Gateway
 
-**Give an AI agent a spending budget, not a blank check.**
+
 
 Agent Trust Gateway lets a human set exact spending rules for an AI agent — how much, on what, per purchase, and in total — and enforces those rules on every single purchase attempt before any money moves. Every decision, whether allowed, blocked, or paused for human approval, is written to a permanent record nobody can edit or delete.
 
@@ -10,7 +10,7 @@ Built against Razorpay's test-mode payment APIs.
 
 ## The problem
 
-AI agents are starting to do things on our behalf: reordering groceries, renewing subscriptions, buying things when they run low. To actually do that, an agent needs some way to pay.
+AI agents are starting to do things on our behalf: reordering groceries, renewing subscriptions, buying stuff. To actually do that, an agent needs some way to pay.
 
 The easy way to enable that — handing an agent a credit card number or a live payment API key — is also the dangerous way. There's no limit on how much it can spend, no restriction on what it can buy, and if something goes wrong (a bug, a bad instruction, a compromised agent) there's no fine-grained way to stop it or even know it happened until the statement arrives.
 
@@ -72,7 +72,7 @@ Creates, stores, and revokes the spending rules ("mandates") a human sets for an
 
 *Code: `src/mandate/`*
 
-### 2. Verification Gateway — the bouncer
+### 2. Verification Gateway 
 The core of the system. Every purchase request from an agent passes through here first, and nothing reaches Razorpay without going through it. For each request it checks, in order:
 1. **Is this really from the agent that owns this mandate?** (cryptographic signature check)
 2. **Have we seen this exact request before?** (blocks replay/duplicate attacks)
