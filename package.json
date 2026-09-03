@@ -13,7 +13,8 @@
     "seed": "tsx scripts/seed.ts",
     "seed:audit": "tsx scripts/seed-audit.ts",
     "sign-demo-request": "tsx scripts/sign-demo-request.ts",
-    "simulate-payment": "tsx scripts/simulate-payment.ts"
+    "simulate-payment": "tsx scripts/simulate-payment.ts",
+    "buyer-agent": "tsx scripts/run-buyer-agent.ts"
   },
   "dependencies": {
     "fastify": "^5.0.0",

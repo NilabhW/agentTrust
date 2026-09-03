@@ -110,33 +110,39 @@ The core control point. Every purchase request passes through here before any mo
 
 Thin wrapper around Razorpay's test-mode Orders and Payments APIs. Only ever called by Program 2, after a pass decision — never reachable directly by an agent.
 
+**Important correction to the original design**: Razorpay's standard flow is not a pure server-to-server call end to end. `create_order()` is genuinely server-side, but the order_id must then be handed to Razorpay's Checkout widget to actually complete and capture the payment — a payment made without going through Checkout can't be captured and gets auto-refunded. Even in test mode, this means a mock bank page with Success/Failure buttons has to be "completed," not just an API response. For the demo, this gets automated with a headless browser rather than requiring an actual human to click anything.
+
 ### 1) Architecture
 - Holds the Razorpay test API key/secret (env vars, never hardcoded).
 - Translates an internal purchase request into a Razorpay Order-creation payload.
+- **Headless checkout runner**: a Playwright (or Puppeteer) script that takes an order_id, loads a minimal page with Razorpay's Checkout.js pointed at that order, fills in Razorpay's documented test card/UPI credentials, and clicks "Success" on the mock bank page — invoked automatically, no human involved.
 - Receives Razorpay's webhook events (`order.paid`, `payment.failed`) and normalizes the result back to Programs 2 and 4.
 - No business logic here — bounds/policy decisions have already happened in Program 2 by the time this layer is called.
 
 ### 2) Detailed features required
 - `create_order(amount, currency, receipt_id, notes)` → calls Razorpay's Orders API, returns `order_id`.
-- A test-mode "auto-pay" helper using Razorpay's documented test card/UPI credentials, so the full flow can run end-to-end in a demo without a human clicking through a checkout page manually.
+- **Headless checkout automation**: a script that drives Razorpay's actual Checkout.js flow programmatically using documented test credentials, so the demo shows a genuinely completed payment rather than a fabricated "success" status. Runs immediately after `create_order()` succeeds, on the pass path only.
 - Webhook receiver: verifies Razorpay's webhook signature (HMAC with the webhook secret) before processing any event.
 - Error mapping: Razorpay API errors → normalized internal error codes, so Program 4's log stays readable.
 - Idempotency handling so a retried call can't double-charge.
 
 ### 3) Build guide
 1. Get Razorpay test-mode API keys from the dashboard.
-2. **Fetch Razorpay's current Orders API docs before writing any integration code** — don't rely on memorized field names, they drift over time.
+2. **Fetch Razorpay's current Orders API and Standard Checkout docs before writing any integration code** — don't rely on memorized field names or flow details, they drift over time.
 3. Implement `create_order()` — `POST /v1/orders` with amount in paise, currency, receipt.
-4. Implement the webhook endpoint, verifying the signature per Razorpay's documented scheme.
-5. Implement the test-mode auto-pay helper for demo purposes.
-6. Normalize all responses into `{status: success | failed, order_id, payment_id, raw_error}`.
-7. Add retry/backoff for transient network errors only — never retry a genuine decline.
+4. Build a minimal static HTML page that loads `checkout.js` against a given order_id — this is what the headless browser will drive.
+5. Write the Playwright/Puppeteer script: launch headless, open the checkout page, select a payment method, fill Razorpay's documented test card or UPI credentials, submit, click "Success" on the mock bank page, wait for the redirect/callback.
+6. Implement the webhook endpoint, verifying the signature per Razorpay's documented scheme.
+7. Normalize all responses into `{status: success | failed, order_id, payment_id, raw_error}`.
+8. Add retry/backoff for transient network errors only — never retry a genuine decline.
+9. Time-box this: if the headless flow proves flaky or slow to get working, fall back to a clearly-labeled simulated payment step for the live demo, and note in the pitch that the Checkout automation works but was swapped for demo reliability.
 
 ### 4) Test cases
 - `create_order` with valid params → returns a real Razorpay test-mode `order_id`.
 - `create_order` with invalid amount (zero/negative) → clean validation error, never reaches Razorpay.
-- Simulated successful test payment → webhook fires `order.paid`, internal record updates to "completed."
-- Simulated failed test payment (Razorpay's documented failure test cards) → webhook fires `payment.failed`, logged distinctly from a Gateway-side rejection — judges should be able to tell "we blocked it" apart from "the bank declined it."
+- Headless checkout run against a valid order with a successful test card → payment actually completes on Razorpay's side (verifiable in the Razorpay dashboard), webhook fires `order.paid`, internal record updates to "completed."
+- Headless checkout run with Razorpay's documented failure test card → webhook fires `payment.failed`, logged distinctly from a Gateway-side rejection — judges should be able to tell "we blocked it" apart from "the bank declined it."
+- Headless script times out or the checkout page fails to load → fails cleanly with a distinct error code, doesn't hang the request or silently mark it as paid.
 - Webhook with an invalid/tampered signature → rejected, not processed.
 - Duplicate webhook delivery (Razorpay does retry) → doesn't double-process.
 
@@ -178,10 +184,97 @@ The paper trail, and the human's control panel.
 
 ---
 
-## Suggested build order across all four programs
+## Program 5: Gemini-Powered Buyer Agent
+
+The actual AI buyer. Replaces the "script that fires pre-written requests" with a real model making purchasing decisions — this is what makes the submission an *agentic commerce* project rather than a rules engine with a fixture attached.
+
+**Why this exists**: Programs 1–4 contain zero model calls. They're infrastructure that *gates* an agent, not an agent. The track says "build an agent," and judges will look for a model actually reasoning somewhere in the demo. This program is that.
+
+### 1) Architecture
+- A Gemini tool-use (function-calling) loop, run as a standalone script/service.
+- Given a **goal** in natural language ("restock weekly groceries", "top up the office snack supply under budget").
+- Exposed **tools**: `browse_catalog(category)`, `submit_purchase(item, amount, category)`.
+- `submit_purchase` does **not** talk to Razorpay directly — it signs the request with the agent's mandate keypair and calls Program 2, exactly like any external agent would. The Gateway treats it as untrusted input, same as anything else.
+- Receives the Gateway's structured `{decision, reason}` back as a tool result, and must reason about what to do next (retry smaller, pick a different item, give up, wait for step-up approval).
+
+### 2) Detailed features required
+- **Goal-driven loop**: model decides *what* to buy and *how much* to spend, rather than executing a fixed list.
+- **A mock merchant catalog** to browse — a static JSON list of items with names, prices, categories. Doesn't need to be real; needs to be varied enough that the agent has genuine choices to make.
+- **Tool definitions** with clear schemas so the model calls them correctly.
+- **Rejection handling**: when the Gateway returns `hard_fail` or `step_up`, the reason string goes back to the model and it must adapt. This is the most demo-valuable behavior in the whole project — an AI agent visibly hitting a wall and reasoning about it.
+- **A deliberately over-budget goal** available for the demo (e.g. "buy a premium coffee machine" against a ₹500 grocery mandate) so the step-up flow triggers from genuine model behavior, not a hardcoded test.
+- **Turn limit / stop condition** so the loop can't run away — cap iterations, and stop cleanly when the goal is met or the budget is exhausted.
+
+### 3) Build guide
+1. Build the mock catalog JSON (15–20 items across the category enum).
+2. Define the two tool schemas (`browse_catalog`, `submit_purchase`).
+3. Set up the Gemini API call with function declarations (tools) + a system instruction describing the agent's role and its mandate constraints. Check Gemini's current function-calling docs before implementing — parameter/schema conventions differ from other providers' tool-use formats, don't assume they match.
+4. Implement `submit_purchase`'s handler: sign the request with the mandate keypair, POST to Program 2, return the structured decision to the model as a tool result.
+5. Implement the loop: call model → execute tool → feed result back → repeat until goal met, budget exhausted, or turn cap hit.
+6. Write 2–3 canned goals for the demo: one that succeeds cleanly, one that hits the cumulative cap and triggers step-up, one that tries an out-of-scope category and gets hard-failed.
+7. Log the agent's reasoning alongside the audit trail so the demo can show *both* sides — what the agent thought, and what the Gateway decided.
+
+### 4) Test cases
+- Agent given an in-budget goal → completes purchases, all approved, audit trail matches.
+- Agent given an out-of-scope goal (electronics against a groceries-only mandate) → Gateway hard-fails, agent receives the reason and doesn't blindly retry the identical request.
+- Agent given a goal exceeding the cumulative cap → step-up triggered, agent waits/handles pending state gracefully rather than crashing or spamming retries.
+- Agent hits the turn limit → stops cleanly, logs why.
+- Agent attempts to bypass `submit_purchase` and call Razorpay directly → not possible; verify there's no code path exposing Program 3 to the agent.
+- Malformed tool call from the model → handled without crashing the loop.
+
+---
+
+## Program 6: Bounded Upsell Agent (Groq-powered)
+
+The revenue-growth half of the track. After a purchase is approved, an LLM call via the Groq API suggests one complementary item that fits within the mandate's *remaining* headroom — and that suggestion goes through the exact same bounds check before it can become a real order.
+
+**Why this exists**: the track statement is "grows revenue for a merchant **or** makes a merchant transactable by an AI buyer." Programs 1–5 answer the second half. This answers the first, and does it in a way that's only possible *because* of the mandate system — the upsell is inherently budget-aware, which a normal recommendation engine can't be.
+
+**Why Groq specifically**: this call sits on the critical path right after a payment succeeds and must not add noticeable latency to the demo — Groq's inference speed is the reason to pick it here over a slower provider for this one narrow, low-stakes call (one short suggestion, not multi-step reasoning). Pick a currently-available Groq-hosted model at build time rather than assuming a specific model name; check Groq's model list, since hosted models rotate.
+
+### 1) Architecture
+- Triggered by Program 2 after a `pass` decision and a successful Program 3 order.
+- **Inputs**: the item just purchased, the mandate's category scope, and remaining headroom (`max_cumulative − current spend`, and `max_per_transaction`).
+- **LLM call (Groq API)**: given those inputs plus the catalog, suggests one complementary item priced within the remaining headroom.
+- **Output path**: the suggestion is surfaced to the buyer agent (Program 5) or the human via Program 4's UI — it is **never** auto-purchased. If accepted, it re-enters through Program 2's normal verification flow like any other request.
+
+### 2) Detailed features required
+- **Headroom calculation** passed explicitly to the model — don't rely on the model to do arithmetic on caps.
+- **Hard filter before the LLM call**: pre-filter the catalog to items within remaining headroom *and* within the mandate's category scope, so the model can only choose from valid options. This is belt-and-braces — the Gateway would catch a bad suggestion anyway, but the model shouldn't be able to suggest something impossible in the first place.
+- **One suggestion, not a list** — keeps the demo legible and avoids the model padding output.
+- **Suggestion logged to the audit trail** as its own entry type (`upsell_suggested`), including whether it was accepted, declined, or ignored. This is what lets you report a measurable conversion number.
+- **Never auto-purchases.** The suggestion is a proposal; acceptance is a fresh request through the Gateway. Non-negotiable — auto-purchasing on an upsell would break the entire "bounded and gated" premise the project rests on.
+- **Graceful empty case**: if remaining headroom is too small for anything in scope, return no suggestion rather than forcing one.
+
+### 3) Build guide
+1. Add `upsell_suggested` / `upsell_accepted` / `upsell_declined` to the audit entry types.
+2. Write the headroom calculator (pure function, easily testable).
+3. Write the catalog pre-filter (in-scope categories ∩ affordable within headroom).
+4. Build the Groq API call: system prompt + purchased item + filtered candidate list → one suggestion with a one-line reason. Set a tight timeout — if Groq's speed advantage isn't showing up, that's a signal something's wrong with the call, not a reason to wait longer.
+5. Wire the trigger into Program 2's post-approval path — **asynchronously**, so a slow or failed LLM call never blocks or breaks the payment flow.
+6. Surface the suggestion in Program 4's UI with accept/decline buttons.
+7. On accept → construct a normal purchase request → route through Program 2 from the top, no shortcuts.
+8. Track and display an upsell conversion metric (suggested vs. accepted, ₹ added) — this is your "grows revenue" evidence for the judges.
+
+### 4) Test cases
+- Purchase approved with healthy headroom → one in-scope, affordable suggestion returned and logged.
+- Purchase approved with near-zero headroom → no suggestion returned, logged as such, no error.
+- Suggested item accepted → routed through Program 2, verified again, order created, audit shows the full chain.
+- Suggested item accepted *after* other spending consumed the headroom in between → correctly rejected/step-up at verification time, proving the upsell can't bypass bounds.
+- LLM call fails or times out → original purchase is unaffected, flow continues, failure logged.
+- Model returns an item outside scope or over headroom (force this with a deliberately broken prompt) → caught by the pre-filter and/or the Gateway, never becomes an order.
+- Upsell conversion metric matches the audit log's suggested/accepted counts.
+
+---
+
+## Suggested build order across all six programs
 
 1. Program 1 (Mandate Service) — nothing else works without it.
 2. Program 4's schema + `write_audit_entry()` — build this early so every other program can log into it from day one, not bolted on at the end.
 3. Program 2 (Verification Gateway) — the core logic.
 4. Program 3 (Razorpay Integration) — wire in once the Gateway can already make pass/fail decisions.
-5. Program 4's frontend — polish last, once there's real data flowing through to display.
+5. Program 5 (Gemini-Powered Buyer Agent) — build before the frontend; it generates the realistic traffic the UI needs to display, and it's what proves the whole system works end to end.
+6. Program 6 (Bounded Upsell Agent) — additive, sits on top of a working approval path.
+7. Program 4's frontend — polish last, once real data is flowing through to display.
+
+**If time runs short**: Program 6 is the one to cut. Programs 1–5 still constitute a complete answer to "makes a merchant transactable by an AI buyer end to end." Cutting Program 5 instead would leave you with infrastructure and no agent — don't.
