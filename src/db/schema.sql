@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
   decision        TEXT NOT NULL CHECK (decision IN (
                     'pass','hard_fail','step_up_requested','step_up_approved',
                     'step_up_denied','step_up_timeout','order_created',
-                    'payment_captured','payment_failed'
+                    'payment_captured','payment_failed',
+                    'upsell_suggested','upsell_accepted','upsell_declined'
                   )),
   reason          TEXT NOT NULL CHECK (length(trim(reason)) > 0),
   order_id        TEXT,
@@ -86,3 +87,21 @@ CREATE TABLE IF NOT EXISTS orders (
 
 CREATE INDEX IF NOT EXISTS idx_orders_mandate_id ON orders(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+CREATE TABLE IF NOT EXISTS upsells (
+  id                TEXT PRIMARY KEY,
+  mandate_id        TEXT NOT NULL REFERENCES mandates(mandate_id),
+  agent_id          TEXT NOT NULL,
+  origin_order_id   TEXT,
+  item_id           TEXT NOT NULL,
+  item_name         TEXT NOT NULL,
+  category          TEXT NOT NULL,
+  amount            REAL NOT NULL CHECK (amount > 0),
+  reason            TEXT NOT NULL,
+  status            TEXT NOT NULL CHECK (status IN ('suggested','accepted','declined')) DEFAULT 'suggested',
+  suggested_at      INTEGER NOT NULL,
+  resolved_at       INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_upsells_mandate_id ON upsells(mandate_id);
+CREATE INDEX IF NOT EXISTS idx_upsells_status ON upsells(status);

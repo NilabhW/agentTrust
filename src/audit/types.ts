@@ -8,6 +8,9 @@ export const DECISIONS = [
   "order_created",
   "payment_captured",
   "payment_failed",
+  "upsell_suggested",
+  "upsell_accepted",
+  "upsell_declined",
 ] as const;
 
 export type Decision = (typeof DECISIONS)[number];

@@ -18,22 +18,45 @@ export interface ResolveOutcome {
   approval: PendingApproval;
 }
 
+// Structural, not a concrete import of UpsellService -- src/upsell/service.ts
+// imports GatewayService (for its accept() flow's "route through Program 2
+// from the top"), so importing UpsellService back here would be a cycle.
+// A real UpsellService instance already satisfies this shape.
+export interface UpsellTrigger {
+  suggestUpsell(
+    input: { mandate: Mandate; originOrderId?: string | null; purchasedItemName?: string },
+    now: number
+  ): Promise<void>;
+}
+
 interface OrderAttempt {
-  mandateId: string;
-  agentId: string;
+  mandate: Mandate;
   amount: number;
   category: string;
+  itemDescription: string;
 }
 
 export class GatewayService {
+  private upsellService?: UpsellTrigger;
+
   constructor(
     private readonly mandateStore: MandateStore,
     private readonly auditStore: AuditStore,
     private readonly pendingApprovalStore: PendingApprovalStore,
     private readonly replayGuard: ReplayGuard,
     private readonly razorpayClient?: RazorpayClient,
-    private readonly ordersStore?: OrdersStore
-  ) {}
+    private readonly ordersStore?: OrdersStore,
+    upsellService?: UpsellTrigger
+  ) {
+    this.upsellService = upsellService;
+  }
+
+  // Lets app.ts wire a real UpsellService in after construction: it needs a
+  // constructed GatewayService itself (for its accept() flow), so the two
+  // can't both be built via constructor injection alone without a cycle.
+  setUpsellService(upsellService: UpsellTrigger): void {
+    this.upsellService = upsellService;
+  }
 
   async verify(input: unknown, now: number = Date.now()): Promise<GatewayDecisionResult> {
     const body = validateVerifyRequestBody(input);
@@ -130,10 +153,10 @@ export class GatewayService {
       });
       const order_id = await this.tryCreateOrder(
         {
-          mandateId: mandate.mandate_id,
-          agentId: mandate.agent_id,
+          mandate,
           amount: body.amount,
           category: body.category,
+          itemDescription: body.item_description,
         },
         now
       );
@@ -232,10 +255,10 @@ export class GatewayService {
     this.writeApprovalAudit(result.approval, "step_up_approved", "human approved step-up request", now);
     await this.tryCreateOrder(
       {
-        mandateId: result.approval.mandate_id,
-        agentId: result.approval.agent_id,
+        mandate,
         amount: result.approval.amount,
         category: result.approval.category,
+        itemDescription: result.approval.item_description,
       },
       now
     );
@@ -274,10 +297,12 @@ export class GatewayService {
   private async tryCreateOrder(attempt: OrderAttempt, now: number): Promise<string | null> {
     if (!this.razorpayClient || !this.ordersStore) return null;
 
+    const mandateId = attempt.mandate.mandate_id;
+    const agentId = attempt.mandate.agent_id;
     const receipt = randomUUID();
     const result = await this.razorpayClient.createOrder({
-      mandate_id: attempt.mandateId,
-      agent_id: attempt.agentId,
+      mandate_id: mandateId,
+      agent_id: agentId,
       amount: attempt.amount,
       category: attempt.category,
       receipt,
@@ -285,8 +310,8 @@ export class GatewayService {
 
     if (result.status === "failed") {
       this.writeAudit({
-        mandateId: attempt.mandateId,
-        agentId: attempt.agentId,
+        mandateId,
+        agentId,
         amount: attempt.amount,
         category: attempt.category,
         decision: "payment_failed",
@@ -299,8 +324,8 @@ export class GatewayService {
     this.ordersStore.create(
       {
         order_id: result.order_id,
-        mandate_id: attempt.mandateId,
-        agent_id: attempt.agentId,
+        mandate_id: mandateId,
+        agent_id: agentId,
         amount: attempt.amount,
         category: attempt.category,
         receipt,
@@ -309,8 +334,8 @@ export class GatewayService {
     );
 
     this.writeAudit({
-      mandateId: attempt.mandateId,
-      agentId: attempt.agentId,
+      mandateId,
+      agentId,
       amount: attempt.amount,
       category: attempt.category,
       decision: "order_created",
@@ -318,6 +343,30 @@ export class GatewayService {
       now,
       orderId: result.order_id,
     });
+
+    // Fire-and-forget, deliberately not awaited: per the buildspec, a slow
+    // or failed upsell suggestion must never add latency to (or break) the
+    // purchase response that triggered it. suggestUpsell() re-fetches the
+    // mandate itself for a headroom calculation that reflects the spend
+    // that was just incremented above, rather than trusting a stale copy.
+    if (this.upsellService) {
+      const upsellService = this.upsellService;
+      (async () => {
+        const freshMandate = this.mandateStore.getById(mandateId, now);
+        await upsellService.suggestUpsell(
+          { mandate: freshMandate, originOrderId: result.order_id, purchasedItemName: attempt.itemDescription },
+          now
+        );
+      })().catch((err) => {
+        // Never let this reach the caller -- but don't go fully silent
+        // either. UpsellService.suggestUpsell() already swallows its own
+        // expected failure modes (Groq errors, a hallucinated pick, an
+        // audit-write failure); reaching this catch means something
+        // unexpected happened, worth a trace even though it can't be
+        // allowed to affect the purchase that triggered it.
+        console.error("upsell suggestion failed:", err);
+      });
+    }
 
     return result.order_id;
   }

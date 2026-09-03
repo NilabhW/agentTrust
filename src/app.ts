@@ -17,6 +17,10 @@ import { createOrdersStore } from "./razorpay/orders-store";
 import { WebhookService } from "./razorpay/webhook-service";
 import { razorpayRoutes } from "./razorpay/routes";
 import { demoRoutes } from "./demo/routes";
+import { GroqClient } from "./upsell/groq-client";
+import { createUpsellStore } from "./upsell/store";
+import { UpsellService } from "./upsell/service";
+import { upsellRoutes } from "./upsell/routes";
 
 export interface BuildAppOptions {
   db: Database.Database;
@@ -26,6 +30,8 @@ export interface BuildAppOptions {
   razorpayKeyId?: string;
   razorpayKeySecret?: string;
   razorpayWebhookSecret?: string;
+  groqApiKey?: string;
+  groqModel?: string;
 }
 
 export function buildApp(opts: BuildAppOptions): FastifyInstance {
@@ -66,11 +72,21 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
     });
   }
 
+  const demoKeysPath = path.join(process.cwd(), "data", "demo-keys.json");
+
+  if (opts.groqApiKey) {
+    const groqClient = new GroqClient({ apiKey: opts.groqApiKey, model: opts.groqModel });
+    const upsellStore = createUpsellStore(opts.db);
+    const upsellService = new UpsellService(upsellStore, auditStore, groqClient, gatewayService, demoKeysPath);
+    gatewayService.setUpsellService(upsellService);
+    fastify.register(upsellRoutes, { upsellService });
+  }
+
   fastify.register(demoRoutes, {
     gatewayService,
     webhookService,
     mandateStore,
-    demoKeysPath: path.join(process.cwd(), "data", "demo-keys.json"),
+    demoKeysPath,
   });
 
   fastify.register(uiRoutes);

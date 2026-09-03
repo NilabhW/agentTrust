@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import fs from "node:fs";
-import { randomUUID, JsonWebKey } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { GatewayService } from "../gateway/service";
 import { WebhookService } from "../razorpay/webhook-service";
 import { MandateStore } from "../mandate/store";
@@ -8,6 +7,7 @@ import { MandateNotFoundError, MandateIntegrityError } from "../mandate/errors";
 import { signAgentRequest, AgentSignedPayload } from "../gateway/agent-signature";
 import { RazorpayWebhookPayload } from "../razorpay/types";
 import { Category } from "../mandate/types";
+import { loadDemoKeys } from "./keys";
 
 // Demo-only convenience routes for driving the whole pipeline from the UI
 // during a live demo, without a terminal. These deliberately bypass the
@@ -22,22 +22,6 @@ export interface DemoRoutesOptions {
   webhookService: WebhookService;
   mandateStore: MandateStore;
   demoKeysPath: string;
-}
-
-interface DemoKeyEntry {
-  agent_id: string;
-  privateKeyJwk: JsonWebKey;
-}
-
-type DemoKeys = Record<string, DemoKeyEntry>;
-
-function loadDemoKeys(demoKeysPath: string): DemoKeys | null {
-  if (!fs.existsSync(demoKeysPath)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(demoKeysPath, "utf8")) as DemoKeys;
-  } catch {
-    return null;
-  }
 }
 
 export async function demoRoutes(fastify: FastifyInstance, opts: DemoRoutesOptions) {

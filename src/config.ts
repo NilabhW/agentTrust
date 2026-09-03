@@ -28,4 +28,9 @@ export const config = {
   razorpayKeyId: process.env.RAZORPAY_KEY_ID,
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
+  // Optional -- Program 6 (Groq upsell agent). Left unset, the Gateway
+  // behaves exactly as it did before Program 6 existed (no upsell
+  // suggestions, no /upsell routes registered).
+  groqApiKey: process.env.GROQ_API_KEY,
+  groqModel: process.env.GROQ_MODEL,
 };

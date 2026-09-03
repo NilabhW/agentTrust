@@ -134,6 +134,12 @@
   .badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
   .settle-btns { display: flex; gap: 4px; flex-wrap: nowrap; }
   .settle-btns .btn-sm { padding: 3px 6px; font-size: 0.62rem; white-space: nowrap; }
+
+  /* Upsell suggestions */
+  .upsell-metrics { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stat-chip { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 14px; min-width: 90px; }
+  .stat-chip .label { font-size: 0.65rem; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat-chip .value { font-size: 1.15rem; font-weight: 700; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -186,6 +192,12 @@
       </section>
     </div>
 
+    <section class="panel" id="upsell-suggestions" hidden>
+      <h2>Upsell Suggestions <span class="sub">suggested by Groq after a purchase, never auto-bought</span></h2>
+      <div id="upsell-metrics" class="upsell-metrics"></div>
+      <div id="upsell-list" class="pending-list"></div>
+    </section>
+
     <section class="panel" id="audit-log">
       <h2>Audit Log</h2>
       <div class="table-wrap">
@@ -205,8 +217,9 @@
   <script>
     const DECISION_CLASS = {
       pass: "ok", order_created: "ok", payment_captured: "ok",
-      hard_fail: "bad", step_up_denied: "bad", payment_failed: "bad",
+      hard_fail: "bad", step_up_denied: "bad", payment_failed: "bad", upsell_declined: "bad",
       step_up_requested: "warn", step_up_approved: "warn", step_up_timeout: "warn",
+      upsell_suggested: "warn", upsell_accepted: "warn",
     };
 
     function escapeHtml(value) {
@@ -365,10 +378,61 @@
       }).join("");
     }
 
+    async function resolveUpsell(id, action) {
+      const res = await fetch(`/upsell/${id}/${action}`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      // On accept, this is a *second* Gateway decision (the re-verified
+      // purchase), independent from the accept call itself succeeding --
+      // e.g. spend consumed since the suggestion was made can still turn
+      // this into a hard_fail or step_up. Surface that, don't just refresh
+      // silently and leave the operator to go spot it in the audit table.
+      if (action === "accept" && data && data.decision && data.decision !== "pass") {
+        alert(`Purchase was not completed: ${data.decision} — ${data.reason || "see audit log for details"}`);
+      }
+      refreshAll();
+    }
+
+    async function loadUpsells() {
+      const panel = document.getElementById("upsell-suggestions");
+      const pendingRes = await fetch("/upsell/pending");
+      if (!pendingRes.ok) {
+        // GROQ_API_KEY isn't configured -- the route doesn't exist at all.
+        panel.hidden = true;
+        return;
+      }
+      panel.hidden = false;
+
+      const [pending, metrics] = await Promise.all([pendingRes.json(), fetch("/upsell/metrics").then((r) => r.json())]);
+
+      document.getElementById("upsell-metrics").innerHTML = `
+        <div class="stat-chip"><div class="label">Suggested</div><div class="value">${metrics.suggested}</div></div>
+        <div class="stat-chip"><div class="label">Accepted</div><div class="value">${metrics.accepted}</div></div>
+        <div class="stat-chip"><div class="label">₹ Added</div><div class="value">${fmtMoney(metrics.amount_accepted_inr)}</div></div>
+      `;
+
+      const list = document.getElementById("upsell-list");
+      list.innerHTML = pending.length === 0
+        ? `<span class="empty-note">No upsell suggestions right now.</span>`
+        : pending.map((u) => `
+          <div class="pending-item">
+            <div class="top">
+              <div>
+                <div class="desc">${escapeHtml(u.item_name)} — ${fmtMoney(u.amount)} · ${escapeHtml(u.category)}</div>
+                <div class="sub">${escapeHtml(u.reason)}</div>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-sm btn-ok" onclick="resolveUpsell('${u.id}','accept')">Accept</button>
+              <button class="btn btn-sm btn-bad" onclick="resolveUpsell('${u.id}','decline')">Decline</button>
+            </div>
+          </div>`).join("");
+    }
+
     function refreshAll() {
       loadMandates();
       loadDemoAgents();
       loadPendingApprovals();
+      loadUpsells();
       loadAuditLog();
     }
     refreshAll();
