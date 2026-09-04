@@ -12,7 +12,7 @@ export interface RunBuyerAgentOptions {
   mandateId: string;
   agentId: string;
   allowedCategories: string[];
-  geminiClient: ContentGenerator;
+  contentGenerator: ContentGenerator;
   toolContext: { gatewayUrl: string; privateKeyJwk: JsonWebKey; fetchImpl?: typeof fetch };
   turnLimit?: number;
   onTurn?: (turn: TranscriptTurn) => void;
@@ -51,7 +51,7 @@ export async function runBuyerAgent(opts: RunBuyerAgentOptions): Promise<AgentTr
   const base = { goal: opts.goal, mandateId: opts.mandateId, agentId: opts.agentId };
 
   for (let turnCount = 1; turnCount <= turnLimit; turnCount++) {
-    const response = await opts.geminiClient.generateContent({ contents, tools, systemInstruction });
+    const response = await opts.contentGenerator.generateContent({ contents, tools, systemInstruction });
 
     if (response.status === "failed") {
       const turn: TranscriptTurn = { turn: turnCount, modelText: null, toolCalls: [] };
@@ -61,7 +61,7 @@ export async function runBuyerAgent(opts: RunBuyerAgentOptions): Promise<AgentTr
         ...base,
         turns,
         stopReason: "turn_limit_reached",
-        finalMessage: `Gemini call failed: ${response.raw_error}`,
+        finalMessage: `Model call failed: ${response.raw_error}`,
       };
     }
 

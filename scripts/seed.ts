@@ -17,7 +17,11 @@ const seeds = [
     agent_id: "demo-agent-1",
     category: ["groceries", "food_delivery"] as const,
     max_per_transaction: 1500,
-    max_cumulative: 10000,
+    // Deliberately tight relative to the groceries+food_delivery catalog total
+    // (~5,770) so the buyer agent's "stock up" canned scenario reliably trips
+    // the cumulative cap within a few purchases instead of running out of
+    // turns first.
+    max_cumulative: 1800,
     rolling_window_seconds: 7 * 24 * 60 * 60,
     expires_at: Date.now() + 30 * DAY_MS,
   },

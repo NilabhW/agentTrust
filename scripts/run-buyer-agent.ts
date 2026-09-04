@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { JsonWebKey } from "node:crypto";
-import { GeminiClient } from "../src/agent/gemini-client";
+import { GroqAgentClient } from "../src/agent/groq-agent-client";
 import { runBuyerAgent } from "../src/agent/loop";
 import { TranscriptTurn } from "../src/agent/types";
 
@@ -28,14 +28,14 @@ function parseArgs(argv: string[]) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     console.error(
-      "GEMINI_API_KEY is not set. Add it to .env (never paste it into chat) -- see .env.example."
+      "GROQ_API_KEY is not set. Add it to .env (never paste it into chat) -- see .env.example."
     );
     process.exit(1);
   }
-  const model = process.env.GEMINI_MODEL; // GeminiClient falls back to its own default if unset
+  const model = process.env.GROQ_AGENT_MODEL; // GroqAgentClient falls back to its own default if unset
   const gatewayUrl = process.env.GATEWAY_URL ?? "http://localhost:3000";
 
   const demoKeysPath = path.join(process.cwd(), "data", "demo-keys.json");
@@ -93,14 +93,14 @@ async function main() {
     console.log("");
   };
 
-  const geminiClient = new GeminiClient({ apiKey, model });
+  const groqAgentClient = new GroqAgentClient({ apiKey, model });
 
   const transcript = await runBuyerAgent({
     goal,
     mandateId,
     agentId: mandate.agent_id,
     allowedCategories: mandate.category,
-    geminiClient,
+    contentGenerator: groqAgentClient,
     toolContext: { gatewayUrl, privateKeyJwk: keyEntry.privateKeyJwk },
     onTurn,
   });

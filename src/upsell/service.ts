@@ -39,7 +39,13 @@ const SYSTEM_PROMPT =
 // or displayed -- neither is a sufficient trust boundary on its own.
 const MAX_PROMPT_ITEM_LENGTH = 120;
 const MAX_REASON_LENGTH = 200;
-const MAX_RESPONSE_TOKENS = 150;
+// gpt-oss-20b is a reasoning model: most of its completion budget goes to a
+// hidden `reasoning` field before it ever emits the JSON answer. Against the
+// realistic ~12-item candidate list, 150 was observed to truncate before any
+// JSON was produced at all (Groq's own json_object validator rejected the
+// empty output). 400 leaves comfortable headroom above the ~200-280 reasoning
+// tokens seen in practice.
+const MAX_RESPONSE_TOKENS = 400;
 
 function sanitizeForPrompt(value: string, maxLength: number): string {
   return value

@@ -184,14 +184,16 @@ The paper trail, and the human's control panel.
 
 ---
 
-## Program 5: Gemini-Powered Buyer Agent
+## Program 5: Buyer Agent (originally Gemini-powered, now Groq-powered)
 
 The actual AI buyer. Replaces the "script that fires pre-written requests" with a real model making purchasing decisions — this is what makes the submission an *agentic commerce* project rather than a rules engine with a fixture attached.
+
+**Correction to the original design (applied 2026-09-03)**: this program originally ran on Gemini's `generateContent` API (`src/agent/gemini-client.ts`). During live demo testing, Gemini's free tier repeatedly returned `quota exceeded` (a `generate_content_free_tier_requests` limit as low as 20) even after multi-minute waits between attempts — not viable for a recorded demo that needs to run reliably on request. Program 5 now runs on Groq's OpenAI-compatible chat-completions API (`src/agent/groq-agent-client.ts`, `GroqAgentClient`) instead, using `qwen/qwen3.6-27b` (confirmed via a live request to return clean tool_calls, without the reasoning-heavy hidden-token overhead of the `openai/gpt-oss` models used for Program 6). `src/agent/loop.ts`'s agent loop is untouched — it already depended only on the provider-agnostic `ContentGenerator` interface (`generateContent(input) -> result`), so the swap is a new class implementing that same interface, translating Gemini's `contents`/`parts`/`functionCall`/`functionResponse` wire shape to and from OpenAI's `messages`/`tool_calls` shape. `gemini-client.ts` and its tests are left in place, unused but correct, in case Gemini access improves later — nothing below in this section describing tool schemas, the goal-driven loop, or test cases changed; only which model answers the `generateContent` call did.
 
 **Why this exists**: Programs 1–4 contain zero model calls. They're infrastructure that *gates* an agent, not an agent. The track says "build an agent," and judges will look for a model actually reasoning somewhere in the demo. This program is that.
 
 ### 1) Architecture
-- A Gemini tool-use (function-calling) loop, run as a standalone script/service.
+- A tool-use (function-calling) loop, run as a standalone script/service — originally against Gemini's API, now Groq's (see the correction note above).
 - Given a **goal** in natural language ("restock weekly groceries", "top up the office snack supply under budget").
 - Exposed **tools**: `browse_catalog(category)`, `submit_purchase(item, amount, category)`.
 - `submit_purchase` does **not** talk to Razorpay directly — it signs the request with the agent's mandate keypair and calls Program 2, exactly like any external agent would. The Gateway treats it as untrusted input, same as anything else.

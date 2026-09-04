@@ -57,14 +57,20 @@ Every one of those outcomes — allowed, blocked, paused, approved, denied, time
 
 ## Architecture
 
-The system is four components. They share one codebase (simplest for now) but are kept logically separate, so any one of them could become its own service later without a rewrite.
+The system is six components. They share one codebase (simplest for now) but are kept logically separate, so any one of them could become its own service later without a rewrite.
 
 ```
-Human sets rules → Mandate Service (stores signed spending permissions)
-        ↓
-AI Agent → Verification Gateway ("the bouncer") → Razorpay Integration (test-mode payments)
-        ↓                                    ↓
-        └──────────► Audit Log + UI ◄────────┘
+Human sets rules ─────────────► Mandate Service (stores signed spending permissions)
+                                          ▲
+                                          │ checks every request against it
+                                          │
+AI Buyer Agent ──signed purchase──► Verification Gateway ("the bouncer") ──approved──► Razorpay
+                                          │                                               │
+                                          ├──► Upsell Agent (suggests one more item,       │
+                                          │     already filtered to what's affordable,     │
+                                          │     never auto-bought)                         │
+                                          │                                                │
+                                          └──────────────► Audit Log + UI ◄─────(webhook)───┘
 ```
 
 ### 1. Mandate Service — the permission slip
@@ -89,9 +95,19 @@ A thin wrapper around Razorpay's real test-mode payment APIs. It only ever gets 
 *Code: `src/razorpay/`*
 
 ### 4. Audit Log + UI — the paper trail and control panel
-Every decision the Gateway makes, and every outcome the Razorpay layer reports, gets written here — and once written, an entry can never be edited or deleted (enforced at the database level, not just by convention). Also serves the web dashboard: an overview of every mandate's spend vs. budget, the list of purchases currently waiting on a human, and the full timestamped log, color-coded so it's easy to scan.
+Every decision the Gateway makes, and every outcome the Razorpay layer reports, gets written here — and once written, an entry can never be edited or deleted (enforced at the database level, not just by convention). Also serves the web dashboard: an overview of every mandate's spend vs. budget, the list of purchases currently waiting on a human, pending upsell suggestions, and the full timestamped log, color-coded so it's easy to scan.
 
 *Code: `src/audit/`, `src/ui/`, `public/index.html`*
+
+### 5. Buyer Agent — the AI actually doing the shopping
+A real AI model (via Groq) that decides what to buy, rather than a script replaying a fixed list. Given a plain-English goal ("order groceries for tonight's dinner"), it browses a mock catalog, decides what to purchase and how much to spend, and signs each purchase request with its own private key — the exact same signed-request path any other agent would use; the Gateway has no idea it's talking to a demo agent versus a real one. If a purchase gets blocked or paused, the reason goes back to the model, which has to react — retry differently, stop, or explain why — instead of blindly resubmitting the same request. The agent is deliberately never told its own spending limits; it has to discover them by trying, the same way a real agent with only partial visibility into its own permissions would.
+
+*Code: `src/agent/`, run via `npm run buyer-agent`*
+
+### 6. Upsell Agent — the revenue half
+After a purchase goes through, a second, much smaller AI call (also via Groq) looks at what was just bought and suggests exactly one complementary item — but only from a list that's already been filtered down to what the mandate can actually still afford, so the model never gets a chance to suggest something over budget in the first place. Nothing is ever bought automatically: the suggestion shows up in the dashboard, and if a human clicks Accept, that acceptance goes through the exact same Verification Gateway checks as any other purchase, checked fresh against whatever budget remains at that exact moment — so spend that happened in between the suggestion and the click is genuinely caught, not assumed safe.
+
+*Code: `src/upsell/`*
 
 ### A note on trust
 The two places where trust actually gets established are both handled by cryptographic signatures, not by "the caller said so": a mandate's terms can't be silently altered after it's created, and a purchase request can't be forged by someone who doesn't hold the agent's private key. Three separate signature schemes are used for three separate trust relationships (mandate integrity, agent request authenticity, and Razorpay webhook authenticity) — kept deliberately separate rather than reused across purposes.
@@ -101,20 +117,30 @@ The two places where trust actually gets established are both handled by cryptog
 - **Node.js + TypeScript**
 - **Fastify** — HTTP server / API routes
 - **better-sqlite3** — storage (SQLite; swappable for Postgres later without changing the design)
-- **Vitest** — testing (256 automated tests, written before the code they test)
+- **Vitest** — testing (358 automated tests, written before the code they test)
+- **Groq** — powers both AI pieces: the buyer agent's purchasing decisions and the upsell agent's suggestions
+- **Razorpay test-mode APIs** — real payment orders and webhook-based settlement
 
 ## Getting started
 
 ```bash
 npm install
-cp .env.example .env   # then fill in a signing key (and Razorpay test keys, if you have them)
+cp .env.example .env   # then fill in a signing key (and Razorpay/Groq test keys, if you have them)
 npm run seed            # creates a few demo agents with real spending mandates
 npm run dev              # starts the server on http://localhost:3000
 ```
 
 Open `http://localhost:3000` for the dashboard — it includes a built-in "Simulate Agent Purchase" panel so you can try the whole flow without writing any code.
 
-Razorpay's test-mode keys (`RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`) are optional. Without them, purchases are still fully checked against every rule — the only difference is that no real order gets created at the end.
+Razorpay's test-mode keys (`RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`) and `GROQ_API_KEY` are all optional. Without them, purchases are still fully checked against every rule — the only differences are that no real order gets created at the end (no Razorpay keys), and no upsell suggestions appear (no Groq key).
+
+To watch the AI buyer agent actually shop (needs `GROQ_API_KEY` in `.env` and the server already running):
+
+```bash
+npm run buyer-agent -- --canned clean   # or: --canned step-up | --canned hard-fail
+```
+
+The agent's reasoning prints live in the terminal; the purchase, any upsell suggestion, and every decision the Gateway made show up in the dashboard in real time — the two are meant to be watched side by side.
 
 ## API overview
 
@@ -128,6 +154,9 @@ Razorpay's test-mode keys (`RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY
 | `POST` | `/gateway/pending-approvals/:id/approve` \| `/deny` | Resolve a paused purchase |
 | `POST` | `/razorpay/webhook` | Receives payment results from Razorpay |
 | `GET` | `/audit` | The full, paginated audit trail |
+| `GET` | `/upsell/pending` | List upsell suggestions awaiting a human decision |
+| `POST` | `/upsell/:id/accept` \| `/decline` | Resolve a suggestion |
+| `GET` | `/upsell/metrics` | Suggested / accepted / declined counts and ₹ added |
 
 ## Testing
 
@@ -145,5 +174,6 @@ This is a hackathon-stage build, and a few gaps are deliberate, documented trade
 - Creating a mandate has no authentication yet — anyone who can reach the service can mint one. A real deployment needs an operator-auth decision (sessions vs. API keys) that hasn't been made.
 - The replay-protection cache (which blocks duplicate requests) lives in memory and resets on restart, and isn't shared across multiple server instances.
 - If a purchase is approved but Razorpay's order-creation call itself then fails, the spending budget has already been debited even though no order exists — visible in the audit log, but not automatically reversed.
+- The AI agent can influence the short explanation text shown to a human next to an upsell's Accept button (it comes from a prompt that includes what the agent said it bought), though it can never influence *what* gets suggested or its price — those always come from a pre-filtered, budget-safe list, never from the model. The text is length-capped and stripped of control characters, but a persuasively-worded suggestion is still something a human operator reads before deciding.
 
 Full detail on these and how each was arrived at lives in `CLAUDE.md`.
