@@ -13,6 +13,7 @@ const app = buildApp({
   razorpayWebhookSecret: config.razorpayWebhookSecret,
   groqApiKey: config.groqApiKey,
   groqModel: config.groqModel,
+  groqAgentModel: config.groqAgentModel,
 });
 
 app

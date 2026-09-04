@@ -119,11 +119,9 @@
   th:nth-child(4), td:nth-child(4) { width: 9%; }
   th:nth-child(5), td:nth-child(5) { width: 6%; }
   th:nth-child(6), td:nth-child(6) { width: 16%; }
-  th:nth-child(7), td:nth-child(7) { width: 18%; }
+  th:nth-child(7), td:nth-child(7) { width: 20%; }
   th:nth-child(8), td:nth-child(8) { width: 8%; }
-  th:nth-child(9), td:nth-child(9) { width: 7%; }
-  th:nth-child(10), td:nth-child(10) { width: 10%; }
-  th:last-child, td:last-child { overflow: visible; }
+  th:nth-child(9), td:nth-child(9) { width: 15%; }
   tr.decision-ok td:first-child, tr.decision-bad td:first-child, tr.decision-warn td:first-child { border-left: 3px solid transparent; }
   tr.decision-ok { background: #f7fcf9; }
   tr.decision-bad { background: #fdf7f7; }
@@ -134,14 +132,75 @@
   .badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
   .badge.bad { background: var(--bad-bg); color: var(--bad-fg); }
   .badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
-  .settle-btns { display: flex; gap: 4px; flex-wrap: nowrap; }
-  .settle-btns .btn-sm { padding: 3px 6px; font-size: 0.62rem; white-space: nowrap; }
 
   /* Upsell suggestions */
   .upsell-metrics { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
   .stat-chip { background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 14px; min-width: 90px; }
   .stat-chip .label { font-size: 0.65rem; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.03em; }
   .stat-chip .value { font-size: 1.15rem; font-weight: 700; margin-top: 2px; }
+
+  /* Create Mandate form */
+  .field-row-4 { display: grid; grid-template-columns: 1.3fr 1fr 1fr 0.9fr; gap: 10px; }
+  @media (max-width: 760px) { .field-row-4 { grid-template-columns: 1fr 1fr; } }
+  .category-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 0 2px; }
+  .category-checks label { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 500; color: var(--text); cursor: pointer; }
+  .category-checks input { width: auto; }
+  .field textarea {
+    width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border);
+    font-size: 0.9rem; background: #f9fafc; color: var(--text); font-family: inherit; resize: vertical;
+  }
+  .field textarea:focus { outline: 2px solid var(--primary); outline-offset: 1px; background: #fff; }
+
+  /* Agent transcript -- a step-by-step narrative, not raw JSON */
+  .transcript { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; max-height: 520px; overflow-y: auto; scroll-behavior: smooth; }
+  .transcript-turn { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; background: #fafbff; animation: row-flash 1s ease-out; }
+  .transcript-model { font-size: 0.85rem; color: var(--text); margin-bottom: 6px; font-style: italic; }
+  .step { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; margin-top: 6px; }
+  .step-icon { font-size: 1.05rem; line-height: 1.3; flex-shrink: 0; }
+  .step-body { flex: 1; min-width: 0; }
+  .step-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+  .step-detail { font-size: 0.74rem; color: var(--text-soft); margin-top: 2px; word-break: break-word; }
+  .step-status { font-size: 0.78rem; font-weight: 700; margin-top: 4px; }
+  .step-status-ok { color: var(--ok-fg); }
+  .step-status-bad { color: var(--bad-fg); }
+  .step-status-warn { color: var(--warn-fg); }
+  .thinking-dots::after { content: ""; animation: thinking-dots 1.2s steps(4, end) infinite; }
+  @keyframes thinking-dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } 100% { content: ""; } }
+
+  /* Toast notifications -- replace manual payment buttons/modal entirely;
+     payments now auto-settle and just announce themselves. */
+  .toast-container {
+    position: fixed; top: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column;
+    gap: 10px; max-width: 320px;
+  }
+  .toast {
+    background: #fff; border-radius: var(--radius-md); box-shadow: var(--shadow); padding: 12px 16px;
+    display: flex; gap: 10px; align-items: flex-start; border-left: 4px solid var(--primary);
+    animation: toast-in 0.25s ease-out;
+  }
+  .toast.leaving { animation: toast-out 0.25s ease-in forwards; }
+  @keyframes toast-in { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes toast-out { to { transform: translateX(24px); opacity: 0; } }
+  .toast-icon { font-size: 1.15rem; flex-shrink: 0; }
+  .toast-title { font-size: 0.85rem; font-weight: 700; }
+  .toast-sub { font-size: 0.76rem; color: var(--text-soft); margin-top: 2px; }
+  .toast.ok { border-left-color: var(--ok-fg); }
+  .toast.bad { border-left-color: var(--bad-fg); }
+  .toast.warn { border-left-color: var(--warn-fg); }
+  .toast.info { border-left-color: var(--primary); }
+
+  /* Spend-change pulse on mandate cards */
+  @keyframes spend-pulse { 0% { background: #dbe6ff; } 100% { background: transparent; } }
+  .mandate-card.spend-pulse { animation: spend-pulse 1.4s ease-out; }
+
+  /* Small confetti burst on a completed purchase */
+  .confetti-piece {
+    position: fixed; top: -10px; width: 8px; height: 8px; z-index: 250; pointer-events: none;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    to { transform: translateY(105vh) rotate(540deg); opacity: 0.3; }
+  }
 </style>
 </head>
 <body>
@@ -154,6 +213,41 @@
     <section class="panel" id="mandate-overview">
       <h2>Mandate Overview</h2>
       <div id="mandate-cards" class="mandate-grid"></div>
+    </section>
+
+    <section class="panel" id="create-mandate">
+      <h2>Create Mandate <span class="sub">issue a new signed spending permission, with its own keypair</span></h2>
+      <form id="mandate-form" class="mandate-form">
+        <div class="field-row-4">
+          <div class="field">
+            <label for="mf-agent-id">Agent ID</label>
+            <input id="mf-agent-id" type="text" placeholder="video-demo-agent" required />
+          </div>
+          <div class="field">
+            <label for="mf-max-per-tx">Max per purchase (₹)</label>
+            <input id="mf-max-per-tx" type="number" min="1" step="1" value="1000" />
+          </div>
+          <div class="field">
+            <label for="mf-max-cumulative">Total budget (₹)</label>
+            <input id="mf-max-cumulative" type="number" min="1" step="1" value="5000" />
+          </div>
+          <div class="field">
+            <label for="mf-expires">Expires in (days)</label>
+            <input id="mf-expires" type="number" min="1" step="1" value="30" />
+          </div>
+        </div>
+        <div class="field" style="margin-top: 12px;">
+          <label>Allowed categories</label>
+          <div class="category-checks">
+            <label><input type="checkbox" value="groceries" checked /> groceries</label>
+            <label><input type="checkbox" value="food_delivery" /> food_delivery</label>
+            <label><input type="checkbox" value="subscriptions" /> subscriptions</label>
+            <label><input type="checkbox" value="electronics" /> electronics</label>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 14px;">Create Mandate</button>
+      </form>
+      <div id="mandate-create-result" class="result-card" hidden></div>
     </section>
 
     <div class="two-col">
@@ -194,6 +288,23 @@
       </section>
     </div>
 
+    <section class="panel" id="run-agent" hidden>
+      <h2>Run Buyer Agent <span class="sub">give it a goal in plain English — it decides what to buy</span></h2>
+      <form id="agent-form" class="purchase-form">
+        <div class="field">
+          <label for="af-mandate">Agent / Mandate</label>
+          <select id="af-mandate"></select>
+        </div>
+        <div class="field">
+          <label for="af-goal">Goal</label>
+          <textarea id="af-goal" rows="2">Order some groceries for tonight's dinner. Keep it modest -- nothing extravagant.</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" id="af-submit">Run Agent</button>
+      </form>
+      <div id="agent-transcript" class="transcript"></div>
+      <div id="agent-summary" class="result-card" hidden></div>
+    </section>
+
     <section class="panel" id="upsell-suggestions" hidden>
       <h2>Upsell Suggestions <span class="sub">suggested by Groq after a purchase, never auto-bought</span></h2>
       <div id="upsell-metrics" class="upsell-metrics"></div>
@@ -207,7 +318,7 @@
           <thead>
             <tr>
               <th>Time</th><th>Mandate</th><th>Agent</th><th>Category</th>
-              <th>Amount</th><th>Decision</th><th>Reason</th><th>Order</th><th>Payment</th><th></th>
+              <th>Amount</th><th>Decision</th><th>Reason</th><th>Order</th><th>Payment</th>
             </tr>
           </thead>
           <tbody id="audit-rows"></tbody>
@@ -215,6 +326,8 @@
       </div>
     </section>
   </div>
+
+  <div id="toast-container" class="toast-container"></div>
 
   <script>
     const DECISION_CLASS = {
@@ -235,6 +348,7 @@
       return "₹" + Number(n).toLocaleString("en-IN");
     }
 
+    let previousSpend = {};
     async function loadMandates() {
       const res = await fetch("/mandates");
       const mandates = await res.json();
@@ -242,7 +356,9 @@
         const pct = m.max_cumulative > 0
           ? Math.min(100, (m.current_cumulative_spend / m.max_cumulative) * 100)
           : 0;
-        return `<div class="mandate-card status-${escapeHtml(m.status)}">
+        const prev = previousSpend[m.mandate_id];
+        const justChanged = prev !== undefined && prev !== m.current_cumulative_spend;
+        return `<div class="mandate-card status-${escapeHtml(m.status)}${justChanged ? " spend-pulse" : ""}">
           <div class="row1">
             <span class="agent">${escapeHtml(m.agent_id)}</span>
             <span class="pill status-${escapeHtml(m.status)}">${escapeHtml(m.status)}</span>
@@ -252,16 +368,23 @@
           <div class="spend-line"><span>${fmtMoney(m.current_cumulative_spend)} spent</span><span>cap ${fmtMoney(m.max_cumulative)}</span></div>
         </div>`;
       }).join("") || `<span class="empty-note">No mandates yet -- run \`npm run seed\`.</span>`;
+      for (const m of mandates) previousSpend[m.mandate_id] = m.current_cumulative_spend;
     }
 
     let demoAgents = [];
     async function loadDemoAgents() {
       const res = await fetch("/demo/agents");
       demoAgents = await res.json();
-      const select = document.getElementById("pf-mandate");
-      select.innerHTML = demoAgents.map((a) =>
+      const optionsHtml = demoAgents.map((a) =>
         `<option value="${escapeHtml(a.mandate_id)}">${escapeHtml(a.agent_id)} — ${escapeHtml(a.category.join(", "))} (${fmtMoney(a.current_cumulative_spend)}/${fmtMoney(a.max_cumulative)})</option>`
-      ).join("") || `<option value="">No demo agents -- run \`npm run seed\`</option>`;
+      ).join("") || `<option value="">No demo agents -- create one above, or run \`npm run seed\`</option>`;
+      for (const selectId of ["pf-mandate", "af-mandate"]) {
+        const select = document.getElementById(selectId);
+        if (!select) continue;
+        const previousValue = select.value;
+        select.innerHTML = optionsHtml;
+        if (demoAgents.some((a) => a.mandate_id === previousValue)) select.value = previousValue;
+      }
     }
 
     function renderPurchaseResult(result, error) {
@@ -300,6 +423,43 @@
       if (!res.ok) { renderPurchaseResult(null, data.error || "Request failed"); return; }
       renderPurchaseResult(data);
       refreshAll();
+    });
+
+    document.getElementById("mandate-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const resultEl = document.getElementById("mandate-create-result");
+      const categories = Array.from(
+        document.querySelectorAll("#mandate-form .category-checks input:checked")
+      ).map((c) => c.value);
+      if (categories.length === 0) {
+        resultEl.hidden = false;
+        resultEl.innerHTML = `<span class="decision-badge bad">error</span><div class="reason">Pick at least one category.</div>`;
+        return;
+      }
+      const body = {
+        agent_id: document.getElementById("mf-agent-id").value.trim(),
+        category: categories,
+        max_per_transaction: Number(document.getElementById("mf-max-per-tx").value),
+        max_cumulative: Number(document.getElementById("mf-max-cumulative").value),
+        expires_in_days: Number(document.getElementById("mf-expires").value),
+      };
+      const res = await fetch("/demo/mandates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      resultEl.hidden = false;
+      if (!res.ok) {
+        resultEl.innerHTML = `<span class="decision-badge bad">error</span><div class="reason">${escapeHtml(data.error || "Could not create mandate.")}</div>`;
+        return;
+      }
+      resultEl.innerHTML = `<span class="decision-badge ok">created</span><div class="reason">${escapeHtml(data.agent_id)} is ready to use below, in Simulate Purchase or Run Buyer Agent.</div>`;
+      document.getElementById("mf-agent-id").value = "";
+      await refreshAll();
+      document.getElementById("pf-mandate").value = data.mandate_id;
+      const afMandate = document.getElementById("af-mandate");
+      if (afMandate) afMandate.value = data.mandate_id;
     });
 
     function countdownHtml(expiresAt) {
@@ -342,12 +502,49 @@
         </div>`).join("");
     }
 
-    async function settleOrder(orderId, outcome) {
+    function showToast(type, icon, title, sub) {
+      const container = document.getElementById("toast-container");
+      const el = document.createElement("div");
+      el.className = `toast ${type}`;
+      el.innerHTML = `<div class="toast-icon">${icon}</div>
+        <div><div class="toast-title">${escapeHtml(title)}</div><div class="toast-sub">${escapeHtml(sub || "")}</div></div>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.classList.add("leaving");
+        setTimeout(() => el.remove(), 250);
+      }, 3600);
+    }
+
+    function burstConfetti() {
+      const colors = ["#2f5fff", "#15803d", "#b45309", "#7c9bff", "#f59e0b"];
+      for (let i = 0; i < 18; i++) {
+        const piece = document.createElement("div");
+        piece.className = "confetti-piece";
+        piece.style.left = Math.random() * 100 + "vw";
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDuration = 1.1 + Math.random() * 0.8 + "s";
+        document.body.appendChild(piece);
+        setTimeout(() => piece.remove(), 2200);
+      }
+    }
+
+    // Payments are never manually triggered -- once an order exists, it's
+    // settled automatically a moment later and announced with a toast,
+    // rather than making a human click Paid/Failed for every purchase. This
+    // mirrors what actually happens in a real deployment: settlement is
+    // Razorpay confirming the charge, not an operator decision.
+    const autoSettleTriggered = new Set();
+    async function autoSettlePayment(orderId, amount) {
+      if (autoSettleTriggered.has(orderId)) return;
+      autoSettleTriggered.add(orderId);
+      await new Promise((r) => setTimeout(r, 1100));
       await fetch("/demo/settle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: orderId, outcome }),
+        body: JSON.stringify({ order_id: orderId, outcome: "paid" }),
       });
+      showToast("ok", "✓", "Payment successful", fmtMoney(amount) + " · " + orderId);
+      burstConfetti();
       refreshAll();
     }
 
@@ -360,13 +557,6 @@
       );
       const previousMaxId = lastSeenAuditId;
       document.getElementById("audit-rows").innerHTML = entries.map((e) => {
-        const canSettle = e.decision === "order_created" && e.order_id && !settledOrderIds.has(e.order_id);
-        const settleButtons = canSettle
-          ? `<div class="settle-btns">
-               <button class="btn btn-sm btn-ok" onclick="settleOrder('${escapeHtml(e.order_id)}','paid')">Paid</button>
-               <button class="btn btn-sm btn-bad" onclick="settleOrder('${escapeHtml(e.order_id)}','failed')">Failed</button>
-             </div>`
-          : "";
         const isNew = previousMaxId !== null && e.id > previousMaxId;
         return `<tr class="decision-${DECISION_CLASS[e.decision] || ""}${isNew ? " row-new" : ""}">
           <td title="${new Date(e.created_at).toLocaleString()}">${new Date(e.created_at).toLocaleTimeString()}</td>
@@ -378,9 +568,26 @@
           <td class="reason-cell" title="${escapeHtml(e.reason)}">${escapeHtml(e.reason)}</td>
           <td title="${escapeHtml(e.order_id ?? '')}">${escapeHtml(e.order_id ?? '—')}</td>
           <td title="${escapeHtml(e.payment_id ?? '')}">${escapeHtml(e.payment_id ?? '—')}</td>
-          <td>${settleButtons}</td>
         </tr>`;
       }).join("");
+
+      // Auto-settle every unsettled order (no manual Paid/Failed control --
+      // see autoSettlePayment()), and surface a couple of other decisions
+      // as toasts the moment they first appear, so the operator doesn't
+      // have to go hunting through the table to notice them.
+      for (const e of entries) {
+        if (e.decision === "order_created" && e.order_id && !settledOrderIds.has(e.order_id)) {
+          autoSettlePayment(e.order_id, e.request_amount);
+        }
+        const isNew = previousMaxId !== null && e.id > previousMaxId;
+        if (isNew && e.decision === "step_up_requested") {
+          showToast("warn", "⏳", "Needs your approval", `${e.agent_id} · ${fmtMoney(e.request_amount)} would exceed budget`);
+        }
+        if (isNew && e.decision === "upsell_suggested") {
+          showToast("info", "🎁", "New upsell suggestion", e.reason || "");
+        }
+      }
+
       if (entries.length > 0) lastSeenAuditId = Math.max(...entries.map((e) => e.id));
     }
 
@@ -400,13 +607,18 @@
 
     async function loadUpsells() {
       const panel = document.getElementById("upsell-suggestions");
+      // Run Buyer Agent needs GROQ_API_KEY exactly like Upsell does -- same
+      // probe covers both, no need for a second request.
+      const runAgentPanel = document.getElementById("run-agent");
       const pendingRes = await fetch("/upsell/pending");
       if (!pendingRes.ok) {
         // GROQ_API_KEY isn't configured -- the route doesn't exist at all.
         panel.hidden = true;
+        runAgentPanel.hidden = true;
         return;
       }
       panel.hidden = false;
+      runAgentPanel.hidden = false;
 
       const [pending, metrics] = await Promise.all([pendingRes.json(), fetch("/upsell/metrics").then((r) => r.json())]);
 
@@ -434,12 +646,121 @@
           </div>`).join("");
     }
 
+    // Turns a raw tool call into a plain-language step: what the agent
+    // wanted, and what the Gateway decided -- this is the "show what's
+    // actually happening" view, not a debug dump of the tool-call JSON.
+    function renderToolCall(call) {
+      if (call.name === "browse_catalog") {
+        const items = Array.isArray(call.result) ? call.result : [];
+        const category = (call.args && call.args.category) || "the catalog";
+        return `<div class="step">
+          <div class="step-icon">🔍</div>
+          <div class="step-body">
+            <div class="step-title">Browsing ${escapeHtml(category)}</div>
+            <div class="step-detail">${items.length} item${items.length === 1 ? "" : "s"} to choose from</div>
+          </div>
+        </div>`;
+      }
+      if (call.name === "submit_purchase") {
+        const args = call.args || {};
+        const result = call.result || {};
+        const itemLabel = args.item_name || args.item_id || "item";
+        let statusClass = "warn", statusIcon = "⏳", statusText = "Checking against the mandate…";
+        if (result.decision === "pass") {
+          statusClass = "ok"; statusIcon = "✅"; statusText = "Approved — within mandate limits";
+        } else if (result.decision === "hard_fail") {
+          statusClass = "bad"; statusIcon = "⛔"; statusText = "Blocked — " + (result.reason || "hard fail");
+        } else if (result.decision === "step_up") {
+          statusClass = "warn"; statusIcon = "⏳"; statusText = "Sent for human approval — " + (result.reason || "would exceed budget");
+        }
+        return `<div class="step">
+          <div class="step-icon">🛒</div>
+          <div class="step-body">
+            <div class="step-title">Wants to buy: ${escapeHtml(itemLabel)} — ${fmtMoney(args.amount)}</div>
+            <div class="step-status step-status-${statusClass}">${statusIcon} ${escapeHtml(statusText)}</div>
+            ${result.order_id ? `<div class="step-detail">Razorpay order: ${escapeHtml(result.order_id)}</div>` : ""}
+          </div>
+        </div>`;
+      }
+      return `<div class="step">
+        <div class="step-icon">⚙️</div>
+        <div class="step-body">
+          <div class="step-title">${escapeHtml(call.name)}</div>
+          <div class="step-detail">${escapeHtml(JSON.stringify(call.result))}</div>
+        </div>
+      </div>`;
+    }
+
+    function renderAgentTurn(turn) {
+      let html = `<div class="transcript-turn">`;
+      if (turn.modelText) {
+        html += `<div class="transcript-model">💬 ${escapeHtml(turn.modelText)}</div>`;
+      }
+      for (const call of turn.toolCalls) {
+        html += renderToolCall(call);
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    document.getElementById("agent-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const mandate_id = document.getElementById("af-mandate").value;
+      const goal = document.getElementById("af-goal").value.trim();
+      const submitBtn = document.getElementById("af-submit");
+      const transcriptEl = document.getElementById("agent-transcript");
+      const summaryEl = document.getElementById("agent-summary");
+
+      if (!mandate_id || !goal) return;
+
+      submitBtn.disabled = true;
+      submitBtn.classList.add("thinking-dots");
+      submitBtn.textContent = "Agent is thinking";
+      transcriptEl.innerHTML = "";
+      summaryEl.hidden = true;
+
+      try {
+        const res = await fetch("/agent/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mandate_id, goal }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          transcriptEl.innerHTML = `<span class="empty-note">${escapeHtml(data.error || "Agent run failed.")}</span>`;
+          return;
+        }
+        // The route already ran the whole loop and returned the full
+        // transcript -- revealing turns with a short stagger (rather than
+        // real server-sent streaming) gives the same "watching it think"
+        // effect with far less moving parts.
+        for (const turn of data.transcript.turns) {
+          await new Promise((r) => setTimeout(r, 500));
+          transcriptEl.insertAdjacentHTML("beforeend", renderAgentTurn(turn));
+          transcriptEl.scrollTop = transcriptEl.scrollHeight;
+          refreshAll();
+        }
+        summaryEl.hidden = false;
+        const stopLabel = data.transcript.stopReason === "goal_complete" ? "done" : "stopped (turn limit)";
+        const cls = data.transcript.stopReason === "goal_complete" ? "ok" : "warn";
+        summaryEl.innerHTML = `<span class="decision-badge ${cls}">${stopLabel}</span>
+          <div class="reason">${escapeHtml(data.transcript.finalMessage || "")}</div>`;
+      } catch (err) {
+        transcriptEl.innerHTML = `<span class="empty-note">Request failed: ${escapeHtml(String(err))}</span>`;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("thinking-dots");
+        submitBtn.textContent = "Run Agent";
+      }
+    });
+
     function refreshAll() {
-      loadMandates();
-      loadDemoAgents();
-      loadPendingApprovals();
-      loadUpsells();
-      loadAuditLog();
+      // Returns the combined promise so callers that need the DOM to be
+      // caught up before doing something else (e.g. selecting a
+      // freshly-created mandate in a dropdown) can `await` it correctly --
+      // previously this fired all five loads and returned immediately,
+      // which meant `await refreshAll()` didn't actually wait for anything.
+      return Promise.all([loadMandates(), loadDemoAgents(), loadPendingApprovals(), loadUpsells(), loadAuditLog()]);
     }
     refreshAll();
     setInterval(refreshAll, 3000);

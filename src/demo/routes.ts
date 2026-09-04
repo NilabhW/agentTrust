@@ -1,13 +1,19 @@
 import type { FastifyInstance } from "fastify";
+import fs from "node:fs";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { GatewayService } from "../gateway/service";
 import { WebhookService } from "../razorpay/webhook-service";
 import { MandateStore } from "../mandate/store";
 import { MandateNotFoundError, MandateIntegrityError } from "../mandate/errors";
-import { signAgentRequest, AgentSignedPayload } from "../gateway/agent-signature";
+import { ValidationError } from "../mandate/errors";
+import { signAgentRequest, AgentSignedPayload, generateAgentKeypair } from "../gateway/agent-signature";
 import { RazorpayWebhookPayload } from "../razorpay/types";
 import { Category } from "../mandate/types";
-import { loadDemoKeys } from "./keys";
+import { validateCreateMandateInput } from "../mandate/validation";
+import { loadDemoKeys, DemoKeys } from "./keys";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Demo-only convenience routes for driving the whole pipeline from the UI
 // during a live demo, without a terminal. These deliberately bypass the
@@ -52,6 +58,59 @@ export async function demoRoutes(fastify: FastifyInstance, opts: DemoRoutesOptio
       }
     });
     return reply.code(200).send(agents);
+  });
+
+  // Creates a mandate AND a fresh demo keypair together, so a mandate made
+  // through the dashboard's "Create Mandate" panel is immediately usable by
+  // the "Run Buyer Agent" panel -- unlike the real POST /mandates, which
+  // expects the caller to already hold (and never disclose) a private key.
+  fastify.post("/demo/mandates", async (request, reply) => {
+    const body = request.body as {
+      user_id?: string;
+      agent_id?: string;
+      category?: Category[];
+      max_per_transaction?: number;
+      max_cumulative?: number;
+      rolling_window_seconds?: number;
+      rolling_window_days?: number;
+      expires_in_days?: number;
+    };
+
+    const { publicKey, privateKeyJwk } = generateAgentKeypair();
+    const rollingWindowSeconds =
+      body.rolling_window_seconds ??
+      (body.rolling_window_days ? body.rolling_window_days * 24 * 60 * 60 : 30 * 24 * 60 * 60);
+    const expiresAt = Date.now() + (body.expires_in_days ?? 30) * DAY_MS;
+
+    let mandate;
+    try {
+      const validated = validateCreateMandateInput({
+        user_id: body.user_id?.trim() || "demo-user",
+        agent_id: body.agent_id,
+        agent_public_key: publicKey,
+        category: body.category,
+        max_per_transaction: body.max_per_transaction,
+        max_cumulative: body.max_cumulative,
+        rolling_window_seconds: rollingWindowSeconds,
+        expires_at: expiresAt,
+      });
+      mandate = mandateStore.create(validated);
+    } catch (err) {
+      if (err instanceof ValidationError) {
+        return reply.code(400).send({ error: err.message });
+      }
+      throw err;
+    }
+
+    const existing = loadDemoKeys(demoKeysPath) ?? {};
+    const updated: DemoKeys = {
+      ...existing,
+      [mandate.mandate_id]: { agent_id: mandate.agent_id, privateKeyJwk },
+    };
+    fs.mkdirSync(path.dirname(demoKeysPath), { recursive: true });
+    fs.writeFileSync(demoKeysPath, JSON.stringify(updated, null, 2));
+
+    return reply.code(200).send(mandate);
   });
 
   fastify.post("/demo/purchase", async (request, reply) => {

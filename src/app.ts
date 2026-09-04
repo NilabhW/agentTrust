@@ -21,6 +21,7 @@ import { GroqClient } from "./upsell/groq-client";
 import { createUpsellStore } from "./upsell/store";
 import { UpsellService } from "./upsell/service";
 import { upsellRoutes } from "./upsell/routes";
+import { agentRoutes } from "./agent/routes";
 
 export interface BuildAppOptions {
   db: Database.Database;
@@ -32,6 +33,15 @@ export interface BuildAppOptions {
   razorpayWebhookSecret?: string;
   groqApiKey?: string;
   groqModel?: string;
+  groqAgentModel?: string;
+  // Override for tests; defaults to <cwd>/data/demo-keys.json (created by
+  // `npm run seed`) otherwise.
+  demoKeysPath?: string;
+  // Override for tests, so a fake Groq response can be injected without
+  // touching the real network. Only threaded into the agent-run route's
+  // GroqAgentClient -- never into the Gateway calls themselves, which must
+  // stay real HTTP even in this self-referential path (see agent/routes.ts).
+  fetchImpl?: typeof fetch;
 }
 
 export function buildApp(opts: BuildAppOptions): FastifyInstance {
@@ -72,7 +82,7 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
     });
   }
 
-  const demoKeysPath = path.join(process.cwd(), "data", "demo-keys.json");
+  const demoKeysPath = opts.demoKeysPath ?? path.join(process.cwd(), "data", "demo-keys.json");
 
   if (opts.groqApiKey) {
     const groqClient = new GroqClient({ apiKey: opts.groqApiKey, model: opts.groqModel });
@@ -80,6 +90,14 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
     const upsellService = new UpsellService(upsellStore, auditStore, groqClient, gatewayService, demoKeysPath);
     gatewayService.setUpsellService(upsellService);
     fastify.register(upsellRoutes, { upsellService });
+
+    fastify.register(agentRoutes, {
+      mandateStore,
+      demoKeysPath,
+      groqApiKey: opts.groqApiKey,
+      groqAgentModel: opts.groqAgentModel,
+      fetchImpl: opts.fetchImpl,
+    });
   }
 
   fastify.register(demoRoutes, {

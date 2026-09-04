@@ -34,6 +34,14 @@ const DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
 // roster rotates.
 const DEFAULT_MODEL = "qwen/qwen3.6-27b";
 const DEFAULT_TIMEOUT_MS = 20_000;
+// Without an explicit cap, Groq reserves a large worst-case output-token
+// budget against the account's output-tokens-per-minute limit before the
+// model has generated anything -- observed failing outright ("Request too
+// large... Requested 1454") on a longer, more open-ended goal, even though
+// an actual tool-call response only ever needs a few hundred tokens. This
+// keeps every single call safely under a 1000 OTPM tier regardless of goal
+// length.
+const MAX_COMPLETION_TOKENS = 600;
 
 function normalizeErrorBody(body: unknown, status: number): string {
   if (
@@ -138,6 +146,7 @@ export class GroqAgentClient {
         body: JSON.stringify({
           model: this.model,
           messages: toOpenAiMessages(input),
+          max_completion_tokens: MAX_COMPLETION_TOKENS,
           ...(toOpenAiTools(input.tools) ? { tools: toOpenAiTools(input.tools) } : {}),
         }),
         signal: AbortSignal.timeout(this.timeoutMs),

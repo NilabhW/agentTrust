@@ -33,4 +33,8 @@ export const config = {
   // suggestions, no /upsell routes registered).
   groqApiKey: process.env.GROQ_API_KEY,
   groqModel: process.env.GROQ_MODEL,
+  // Program 5 (buyer agent), when triggered from the dashboard's "Run Buyer
+  // Agent" panel instead of scripts/run-buyer-agent.ts. Separate from
+  // groqModel (Program 6) -- see src/agent/groq-agent-client.ts for why.
+  groqAgentModel: process.env.GROQ_AGENT_MODEL,
 };
